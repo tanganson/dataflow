@@ -1,0 +1,77 @@
+{% extends "dataflow/base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-sm-12">
+        <div class="page-title-box d-md-flex justify-content-md-between align-items-center">
+            <h4 class="page-title">Upload &amp; Run Pipeline</h4>
+            <div class="">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="/">Datasets</a></li>
+                    <li class="breadcrumb-item active">Upload</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">Data File</h4>
+                <p class="text-muted mb-0">CSV, Excel, JSON, Parquet, or Feather</p>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label for="file" class="form-label">File *</label>
+                        <input class="form-control" type="file" id="file" name="file" required
+                               accept=".csv,.xlsx,.xls,.json,.parquet,.feather">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name" class="form-label">Dataset Name</label>
+                            <input type="text" class="form-control" id="name" name="name"
+                                   placeholder="Auto-derived from filename">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="rules_file" class="form-label">Rules File (optional)</label>
+                            <input class="form-control" type="file" id="rules_file" name="rules_file"
+                                   accept=".json">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="replace" name="replace">
+                            <label class="form-check-label" for="replace">
+                                Replace existing dataset with same name
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="dry_run" name="dry_run">
+                            <label class="form-check-label" for="dry_run">
+                                Dry-run (preview only, no database write)
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="iconoir-play-outline me-1"></i> Run Pipeline
+                        </button>
+                        <a href="/" class="btn btn-outline-light">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

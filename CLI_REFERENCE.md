@@ -3,8 +3,10 @@
 所有操作統一使用 `pipeline.py`。
 
 ```
-python pipeline.py {run,clean,export,report,list,rules} [options]
+python pipeline.py {run,clean,delete,export,report,list,rules} [options]
 ```
+
+所有指令支援 `--verbose` / `-v`（詳細輸出）和 `--quiet` / `-q`（僅錯誤）。
 
 ---
 
@@ -13,7 +15,7 @@ python pipeline.py {run,clean,export,report,list,rules} [options]
 讀取檔案、推斷型別、清洗、儲存到資料庫。
 
 ```bash
-python pipeline.py run <file> [--name NAME] [--rules RULES] [--replace] [--export EXPORT]
+python pipeline.py run <file> [--name NAME] [--rules RULES] [--replace] [--export EXPORT] [--dry-run] [--verbose|--quiet]
 ```
 
 | 參數 | 簡寫 | 必填 | 說明 |
@@ -23,6 +25,9 @@ python pipeline.py run <file> [--name NAME] [--rules RULES] [--replace] [--expor
 | `--rules` | `-r` | 否 | 規則檔路徑（省略則自動推斷型別） |
 | `--replace` | — | 否 | 取代同名舊資料集（含動態 SQL table） |
 | `--export` | `-o` | 否 | 同時匯出清洗結果到 `output/` |
+| `--dry-run` | — | 否 | 預覽模式：清洗但不寫入資料庫 |
+| `--verbose` | `-v` | 否 | 顯示逐行處理進度 |
+| `--quiet` | `-q` | 否 | 只顯示錯誤訊息 |
 
 **範例：**
 
@@ -32,6 +37,9 @@ python pipeline.py run data.csv --name "用戶資料"         # 指定資料集�
 python pipeline.py run data.csv -n "電影" -r rules/movie_rules.json  # 使用自訂規則
 python pipeline.py run data.csv -n "電影" --replace       # 取代舊資料
 python pipeline.py run data.csv -n "電影" -o cleaned.csv  # 匯入同時匯出
+python pipeline.py run data.csv --dry-run                 # 預覽清洗結果，不寫入 DB
+python pipeline.py run data.csv --verbose                 # 顯示逐行進度（大檔案）
+python pipeline.py run data.csv --quiet                   # 只顯示錯誤
 ```
 
 ---
@@ -41,18 +49,19 @@ python pipeline.py run data.csv -n "電影" -o cleaned.csv  # 匯入同時匯出
 從資料庫取出原始資料，套用新規則重新清洗並取代舊資料。無需原始檔案。
 
 ```bash
-python pipeline.py clean <name> --rules <RULES>
+python pipeline.py clean <name> [--rules RULES]
 ```
 
 | 參數 | 簡寫 | 必填 | 說明 |
 |------|------|------|------|
 | `name` | — | 是 | 要重新清洗的資料集名稱 |
-| `--rules` | `-r` | 是 | 新的規則檔路徑 |
+| `--rules` | `-r` | 否 | 規則檔路徑（省略則自動推斷型別） |
 
 **範例：**
 
 ```bash
-python pipeline.py clean "電影" --rules rules/strict_rules.json
+python pipeline.py clean "電影"                                # 自動推斷規則
+python pipeline.py clean "電影" --rules rules/strict_rules.json  # 使用自訂規則
 ```
 
 ---

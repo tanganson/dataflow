@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dataflow-manager"
+version = "1.0.0"
+description = "ETL Pipeline — clean, format, store, and export data via Django. Auto-creates typed SQL tables per dataset."
+requires-python = ">=3.10"
+dependencies = [
+    "django>=5.0",
+    "pandas",
+    "openpyxl",
+    "pyarrow",
+    "tqdm",
+]
+
+[project.scripts]
+dataflow = "dataflow.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["dataflow*"]
