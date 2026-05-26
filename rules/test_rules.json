@@ -1,0 +1,22 @@
+{
+    "student_id": {
+        "type": "string",
+        "required": false
+    },
+    "name": {
+        "type": "string",
+        "required": false
+    },
+    "email": {
+        "type": "string",
+        "required": false
+    },
+    "score": {
+        "type": "string",
+        "required": false
+    },
+    "enroll_date": {
+        "type": "date",
+        "required": false
+    }
+}
