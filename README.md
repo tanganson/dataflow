@@ -147,7 +147,7 @@ STORE      ├─ DataRecord（JSON 備份）
 
 ## Admin 查看
 
-啟動 `python manage.py runserver`，打開 `http://localhost:8001/admin`：
+啟動 `python manage.py runserver`，打開 `http://localhost:8000/admin`：
 
 | 表格 | 內容 |
 |------|------|
