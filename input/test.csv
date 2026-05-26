@@ -1,0 +1,16 @@
+user_id,full_name,email,phone,age,score,register_date,is_active
+U001,张三,zhang@example.com,13812345678,28,95.5,2023-01-15,是
+U002,李四,li@invalid,13987654321,thirty,85.2,2023/02/20,否
+U003,王芳,wang@test.com,1371234567a,-5,67.8,2023-03-10,true
+U004,赵磊,zhao@gmail.com,13655556666,45,abc,2023-04-05,1
+U005,孙丽,sun@yahoo.com,13577778888,19,99.9,2023-05-12,false
+U006,周强,zhou@email.com,,22,78.0,2023/06/18,yes
+U007,吴敏,wu@test.org,13399998888,,45.5,invalid,no
+U008,郑爽,zheng@gmail.com,13266667777,35,88.8,2023-08-30,True
+U009,林晨,lin@hotmail.com,13133334444,41,0.0,2023-09-14,0
+U010,郭峰,guo@email.com,13022223333,29,100.0,2023-10-25,yes
+U011,唐雅,tang@test.net,13944445555,33,74.2,2023-11-01,no
+U012,沈梦,shen@gmail.com,13855556666,27,92.4,2023-12-08,1
+U013,宋阳,song@email.com,13766667777,52,63.5,2024-01-19,true
+U014,韩雪,han@yahoo.com,13677778888,31,81.3,2024-02-14,false
+U015,彭博,peng@test.com,13588889999,24,97.6,2024-03-27,yes

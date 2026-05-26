@@ -1,0 +1,6 @@
+student_id,name,email,score,enroll_date
+S001,張三,zhangsan@mail.com,85.5,2023-09-01
+S002,李四,invalid-email,92,2023-09-02
+S003,王五,wangwu@mail.com,not_a_number,2023-09-03
+S004,,zhaoliu@mail.com,78,2023-09-04
+s005,錢七,qianqi@mail.com,105,2023-09-05

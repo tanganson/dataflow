@@ -1,0 +1,4 @@
+student_id,name,email,score,enroll_date
+S001,Alice,alice@mail.com,0.0,2024-01-15
+S003,Charlie,charlie@mail.com,0.0,2024-03-10
+S004,Diana,diana@mail.com,0.0,2024-04-05
