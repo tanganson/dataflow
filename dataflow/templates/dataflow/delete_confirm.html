@@ -1,0 +1,42 @@
+{% extends "dataflow/base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-sm-12">
+        <div class="page-title-box d-md-flex justify-content-md-between align-items-center">
+            <h4 class="page-title">Delete Dataset</h4>
+            <div class="">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="{% url 'dataflow:home' %}">Datasets</a></li>
+                    <li class="breadcrumb-item active">Delete</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mx-auto">
+        <div class="card border-danger">
+            <div class="card-header bg-danger-subtle">
+                <h5 class="card-title text-danger mb-0">
+                    <i class="iconoir-warning-triangle me-2"></i>Delete Dataset
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>You are about to permanently delete the dataset:</p>
+                <div class="alert alert-danger text-center fs-5 fw-bold">{{ ds.name }}</div>
+                <p class="text-danger fw-semibold">This will drop the dynamic table and delete all associated records. This action cannot be undone.</p>
+
+                <form method="post" class="mt-4">
+                    {% csrf_token %}
+                    <div class="d-flex gap-2 justify-content-center">
+                        <a href="{% url 'dataflow:home' %}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

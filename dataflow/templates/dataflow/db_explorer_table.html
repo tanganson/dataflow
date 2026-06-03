@@ -1,0 +1,158 @@
+{% extends "dataflow/base.html" %}
+{% load static %}
+{% load dict_filters %}
+
+{% block head %}
+<link href="{% static 'dataflow/assets/libs/simple-datatables/style.css' %}" rel="stylesheet" type="text/css" />
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-sm-12">
+        <div class="page-title-box d-md-flex justify-content-md-between align-items-center">
+            <h4 class="page-title">{{ table_name }}</h4>
+            <div class="">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="{% url 'dataflow:db_explorer' %}">DB Explorer</a></li>
+                    <li class="breadcrumb-item active">{{ table_name }}</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body d-flex align-items-center justify-content-between py-2">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="text-muted fs-13">Table: <strong>{{ table_name }}</strong></span>
+                    <span class="text-muted fs-13">Rows: <strong>{{ total }}</strong></span>
+                    <span class="text-muted fs-13">Columns: <strong>{{ col_names|length }}</strong></span>
+                    {% if pk_column %}
+                    <span class="text-muted fs-13">PK: <strong>{{ pk_column }}</strong></span>
+                    {% endif %}
+                </div>
+                <div class="d-flex gap-2">
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-soft-success dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="iconoir-export me-1"></i> Export
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'dataflow:db_explorer_export' table_name %}?format=csv">CSV</a></li>
+                            <li><a class="dropdown-item" href="{% url 'dataflow:db_explorer_export' table_name %}?format=json">JSON</a></li>
+                            <li><a class="dropdown-item" href="{% url 'dataflow:db_explorer_export' table_name %}?format=xlsx">Excel</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'dataflow:db_explorer_export' table_name %}?format=sql">SQL Dump</a></li>
+                        </ul>
+                    </div>
+                    <a href="{% url 'dataflow:db_explorer_import' table_name %}" class="btn btn-sm btn-soft-info">
+                        <i class="iconoir-import me-1"></i> Import as Dataset
+                    </a>
+                    <a href="{% url 'dataflow:db_explorer_delete' table_name %}" class="btn btn-sm btn-soft-danger">
+                        <i class="iconoir-trash me-1"></i> Delete
+                    </a>
+                    <a href="{% url 'dataflow:db_explorer' %}" class="btn btn-sm btn-soft-primary">
+                        <i class="iconoir-arrow-left me-1"></i> Back
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if columns %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <span class="text-muted fs-13 me-2">Schema:</span>
+                    {% for col in columns %}
+                    <span class="badge {% if col.is_pk %}bg-warning-subtle text-warning border border-warning{% else %}bg-{% if col.type_category == 'text' %}primary{% elif col.type_category == 'numeric' %}success{% elif col.type_category == 'datetime' %}warning{% elif col.type_category == 'boolean' %}info{% elif col.type_category == 'json' %}dark{% else %}secondary{% endif %}-subtle text-{% if col.type_category == 'text' %}primary{% elif col.type_category == 'numeric' %}success{% elif col.type_category == 'datetime' %}warning{% elif col.type_category == 'boolean' %}info{% elif col.type_category == 'json' %}dark{% else %}secondary{% endif %}{% endif %} fs-12">
+                        {% if col.is_pk %}<i class="iconoir-key"></i> {% endif %}{{ col.name }} <small class="opacity-75">{{ col.type }}</small>
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h4 class="card-title">Data</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body pt-0">
+                {% if row_data %}
+                <div class="table-responsive">
+                    <table class="table datatable" id="datatable_1">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                {% for name in col_names %}
+                                <th>{{ name }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in row_data %}
+                            <tr>
+                                <td>{{ forloop.counter0|add:page_obj.start_index }}</td>
+                                {% for name in col_names %}
+                                <td>{{ row|get_item:name|default:"-" }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if page_obj.paginator.num_pages > 1 %}
+                <nav class="mt-3">
+                    <ul class="pagination pagination-sm justify-content-center">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Prev</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">Prev</span></li>
+                        {% endif %}
+                        <li class="page-item disabled">
+                            <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+                        </li>
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">Next</span></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="iconoir-table-2-rows fs-1 text-muted"></i>
+                    <h5 class="mt-3">No data</h5>
+                    <p class="text-muted">This table is empty.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'dataflow/assets/libs/simple-datatables/umd/simple-datatables.js' %}"></script>
+<script src="{% static 'dataflow/assets/js/pages/datatable.init.js' %}"></script>
+{% endblock %}

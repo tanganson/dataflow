@@ -10,10 +10,10 @@
 <div class="row">
     <div class="col-sm-12">
         <div class="page-title-box d-md-flex justify-content-md-between align-items-center">
-            <h4 class="page-title">{{ ds.name }}</h4>
+            <h4 class="page-title">{{ ds.name }}{% if ds.is_ref %} <span class="badge bg-info-subtle text-info fs-13 align-middle">Live Reference</span>{% endif %}</h4>
             <div class="">
                 <ol class="breadcrumb mb-0">
-                    <li class="breadcrumb-item"><a href="/">Datasets</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'dataflow:home' %}">Datasets</a></li>
                     <li class="breadcrumb-item active">{{ ds.name }}</li>
                 </ol>
             </div>
@@ -29,7 +29,9 @@
                     <span class="text-muted fs-13">ID: <strong>{{ ds.id }}</strong></span>
                     <span class="text-muted fs-13">Rows: <strong>{{ total_rows }}</strong></span>
                     <span class="text-muted fs-13">Columns: <strong>{{ field_names|length }}</strong></span>
+                    {% if not ds.is_ref %}
                     <span class="text-muted fs-13">Updated: <strong>{{ ds.updated_at|date:"Y-m-d H:i" }}</strong></span>
+                    {% endif %}
                 </div>
                 <div class="d-flex gap-2">
                     <div class="dropdown">
@@ -37,21 +39,27 @@
                             <i class="iconoir-export me-1"></i> Export
                         </button>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="/dataset/{{ ds.id }}/export/?format=csv">CSV</a></li>
-                            <li><a class="dropdown-item" href="/dataset/{{ ds.id }}/export/?format=json">JSON</a></li>
-                            <li><a class="dropdown-item" href="/dataset/{{ ds.id }}/export/?format=xlsx">Excel</a></li>
+                            <li><a class="dropdown-item" href="{% url 'dataflow:dataset_export' ds.id %}?format=csv">CSV</a></li>
+                            <li><a class="dropdown-item" href="{% url 'dataflow:dataset_export' ds.id %}?format=json">JSON</a></li>
+                            <li><a class="dropdown-item" href="{% url 'dataflow:dataset_export' ds.id %}?format=xlsx">Excel</a></li>
+                            {% if ds.is_ref %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'dataflow:dataset_export' ds.id %}?format=sql">SQL Dump</a></li>
+                            {% endif %}
                         </ul>
                     </div>
-                    <form method="post" action="/dataset/{{ ds.id }}/clean/" style="display:inline">
+                    {% if not ds.is_ref %}
+                    <form method="post" action="{% url 'dataflow:dataset_clean' ds.id %}" style="display:inline">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-sm btn-soft-info">
                             <i class="iconoir-refresh me-1"></i> Re-clean
                         </button>
                     </form>
+                    {% endif %}
                     <button class="btn btn-sm btn-soft-danger"
-                            hx-post="/dataset/{{ ds.id }}/delete/"
+                            hx-post="{% url 'dataflow:dataset_delete' ds.id %}"
                             hx-target="body"
-                            hx-confirm="Delete '{{ ds.name }}'? This drops the dynamic table and all records.">
+                            hx-confirm="{% if ds.is_ref %}Remove reference '{{ ds.name }}'? (The source table will NOT be dropped){% else %}Delete '{{ ds.name }}'? This drops the dynamic table and all records.{% endif %}">
                         <i class="iconoir-trash me-1"></i> Delete
                     </button>
                 </div>
@@ -68,7 +76,7 @@
                 <div class="d-flex flex-wrap align-items-center gap-2">
                     <span class="text-muted fs-13 me-2">Schema:</span>
                     {% for f in schema.fields_json %}
-                    <span class="badge bg-{% if f.type == 'string' or f.type == 'upper' or f.type == 'lower' %}primary{% elif f.type == 'int' or f.type == 'float' or f.type == 'decimal' %}success{% elif f.type == 'date' or f.type == 'datetime' %}warning{% elif f.type == 'boolean' %}info{% elif f.type == 'email' %}danger{% else %}secondary{% endif %}-subtle text-{% if f.type == 'string' or f.type == 'upper' or f.type == 'lower' %}primary{% elif f.type == 'int' or f.type == 'float' or f.type == 'decimal' %}success{% elif f.type == 'date' or f.type == 'datetime' %}warning{% elif f.type == 'boolean' %}info{% elif f.type == 'email' %}danger{% else %}secondary{% endif %} fs-12">
+                    <span class="badge bg-{% if f.type == 'string' or f.type == 'upper' or f.type == 'lower' %}primary{% elif f.type == 'int' or f.type == 'float' or f.type == 'decimal' %}success{% elif f.type == 'date' or f.type == 'datetime' %}warning{% elif f.type == 'boolean' %}info{% elif f.type == 'url' or f.type == 'image' %}dark{% elif f.type == 'email' %}danger{% else %}secondary{% endif %}-subtle text-{% if f.type == 'string' or f.type == 'upper' or f.type == 'lower' %}primary{% elif f.type == 'int' or f.type == 'float' or f.type == 'decimal' %}success{% elif f.type == 'date' or f.type == 'datetime' %}warning{% elif f.type == 'boolean' %}info{% elif f.type == 'url' or f.type == 'image' %}dark{% elif f.type == 'email' %}danger{% else %}secondary{% endif %} fs-12">
                         {{ f.name }} <small class="opacity-75">{{ f.type }}</small>
                     </span>
                     {% endfor %}

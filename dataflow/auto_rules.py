@@ -52,10 +52,14 @@ def _is_boolean(v: str) -> bool:
     return v.lower() in ('true', 'false', 'yes', 'no', '1', '0', 't', 'f', 'y', 'n')
 
 
+def _is_url(v: str) -> bool:
+    return bool(re.match(r'^https?://[\w\.-]+\.[a-z]{2,}', v))
+
+
 def infer_type(values: List[str]) -> str:
     """
     Infer the cleaning rule type for a list of string values.
-    Returns one of: int, float, email, date, boolean, string
+    Returns one of: url, int, float, email, date, boolean, string
     """
     non_empty = [v for v in values if v and v.strip()]
 
@@ -65,6 +69,7 @@ def infer_type(values: List[str]) -> str:
     checks = [
         ('boolean', _is_boolean),
         ('email', _is_email),
+        ('url', _is_url),
         ('date', _is_date),
         ('int', _is_int),
         ('float', _is_float),

@@ -7,7 +7,7 @@
             <h4 class="page-title">Upload &amp; Run Pipeline</h4>
             <div class="">
                 <ol class="breadcrumb mb-0">
-                    <li class="breadcrumb-item"><a href="/">Datasets</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'dataflow:home' %}">Datasets</a></li>
                     <li class="breadcrumb-item active">Upload</li>
                 </ol>
             </div>
@@ -20,7 +20,7 @@
         <div class="card">
             <div class="card-header">
                 <h4 class="card-title">Data File</h4>
-                <p class="text-muted mb-0">CSV, Excel, JSON, Parquet, or Feather</p>
+                <p class="text-muted mb-0">CSV, Excel, JSON, Parquet, Feather, or SQL Dump</p>
             </div>
             <div class="card-body">
                 <form method="post" enctype="multipart/form-data">
@@ -29,7 +29,7 @@
                     <div class="mb-3">
                         <label for="file" class="form-label">File *</label>
                         <input class="form-control" type="file" id="file" name="file" required
-                               accept=".csv,.xlsx,.xls,.json,.parquet,.feather">
+                               accept=".csv,.xlsx,.xls,.json,.parquet,.feather,.sql">
                     </div>
 
                     <div class="row">
@@ -49,9 +49,10 @@
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="replace" name="replace">
                             <label class="form-check-label" for="replace">
-                                Replace existing dataset with same name
+                                Replace existing dataset / table with same name
                             </label>
                         </div>
+                        <p class="text-warning small mb-0 mt-1">For SQL files: check this to DROP the table before re-creating it.</p>
                     </div>
 
                     <div class="mb-3">
@@ -67,7 +68,7 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="iconoir-play-outline me-1"></i> Run Pipeline
                         </button>
-                        <a href="/" class="btn btn-outline-light">Cancel</a>
+                        <a href="{% url 'dataflow:home' %}" class="btn btn-outline-light">Cancel</a>
                     </div>
                 </form>
             </div>

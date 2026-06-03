@@ -46,7 +46,7 @@
     <!-- Sidebar -->
     <div class="startbar d-print-none">
         <div class="brand">
-            <a href="/" class="logo">
+            <a href="{% url 'dataflow:home' %}" class="logo">
                 <span class="logo-sm">
                     <span class="fs-4 fw-bold text-primary">D</span>
                 </span>
@@ -60,15 +60,22 @@
                     <ul class="navbar-nav mb-auto w-100">
                         <li class="menu-label mt-2"><span>Main</span></li>
                         <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="/">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'dataflow:home' %}">
                                 <i class="iconoir-report-columns menu-icon"></i>
                                 <span>Datasets</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'upload' %}active{% endif %}" href="/upload/">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'upload' %}active{% endif %}" href="{% url 'dataflow:upload' %}">
                                 <i class="iconoir-upload-square-outline menu-icon"></i>
                                 <span>Upload</span>
+                            </a>
+                        </li>
+                        <li class="menu-label mt-2"><span>Database</span></li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'db_explorer' or request.resolver_match.url_name == 'db_explorer_table' %}active{% endif %}" href="{% url 'dataflow:db_explorer' %}">
+                                <i class="iconoir-database menu-icon"></i>
+                                <span>DB Explorer</span>
                             </a>
                         </li>
                         <li class="menu-label mt-2"><span>More</span></li>

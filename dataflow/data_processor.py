@@ -2,17 +2,12 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
-import os
 import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Any, Optional
 
-import django
 import pandas as pd
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'demo.settings')
-django.setup()
 
 from dataflow.models import Dataset, DataRecord, CleaningLog
 
@@ -41,6 +36,20 @@ def clean_email(value: Any) -> str:
 def clean_phone(value: Any) -> str:
     digits = re.sub(r'\D', '', clean_string(value))
     return digits[:15] if digits else ''
+
+def clean_url(value: Any) -> str:
+    """Validate and normalize a URL. Auto-prepends https:// if missing."""
+    s = clean_string(value)
+    if not s:
+        return ''
+    if not re.match(r'^https?://', s):
+        s = 'https://' + s
+    if not re.match(r'^https?://[\w\.-]+\.[a-z]{2,}', s):
+        raise ValueError(f"Invalid URL: {value}")
+    return s
+
+# image URLs use the same validation as url
+clean_image = clean_url
 
 def clean_int(value: Any, default: int = 0, min_val: Optional[int] = None, max_val: Optional[int] = None) -> int:
     try:
@@ -115,6 +124,8 @@ BUILTIN_RULES = {
     'lower': clean_lower,
     'email': clean_email,
     'phone': clean_phone,
+    'url': clean_url,
+    'image': clean_image,
     'int': clean_int,
     'float': clean_float,
     'decimal': clean_decimal,

@@ -42,6 +42,8 @@ RULE_TYPE_TO_FIELD = {
     'lower':   lambda **kw: models.CharField(max_length=kw.pop('max_length', 500), null=not kw.pop('required', False), default=kw.pop('default', ''), blank=True),
     'email':   lambda **kw: models.CharField(max_length=kw.pop('max_length', 255), null=not kw.pop('required', False), default=kw.pop('default', ''), blank=True),
     'phone':   lambda **kw: models.CharField(max_length=kw.pop('max_length', 20), null=not kw.pop('required', False), default=kw.pop('default', ''), blank=True),
+    'url':     lambda **kw: models.URLField(max_length=kw.pop('max_length', 500), null=not kw.pop('required', False), default=kw.pop('default', ''), blank=True),
+    'image':   lambda **kw: models.URLField(max_length=kw.pop('max_length', 500), null=not kw.pop('required', False), default=kw.pop('default', ''), blank=True),
     'boolean': lambda **kw: models.BooleanField(null=not kw.pop('required', False), default=kw.pop('default', False)),
     'date':     lambda **kw: models.DateField(null=not kw.pop('required', False), default=kw.pop('default', None)),
     'datetime': lambda **kw: models.DateTimeField(null=not kw.pop('required', False), default=kw.pop('default', None)),
@@ -199,7 +201,8 @@ class SchemaManager:
         else:
             fields_json = rules or []
 
-        table_name = f"dataflow_dataset_{dataset.id}"
+        safe_name = _sanitize_column_name(dataset.name).strip('_') or 'dataset'
+        table_name = f"{safe_name}_{dataset.id}"
 
         schema_obj = DatasetSchema.objects.create(
             dataset=dataset,

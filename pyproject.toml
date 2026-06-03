@@ -15,8 +15,5 @@ dependencies = [
     "tqdm",
 ]
 
-[project.scripts]
-dataflow = "dataflow.cli:main"
-
 [tool.setuptools.packages.find]
 include = ["dataflow*"]

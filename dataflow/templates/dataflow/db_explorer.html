@@ -1,14 +1,14 @@
 {% extends "dataflow/base.html" %}
-{% load dict_filters %}
 
 {% block content %}
 <div class="row">
     <div class="col-sm-12">
         <div class="page-title-box d-md-flex justify-content-md-between align-items-center">
-            <h4 class="page-title">Datasets</h4>
+            <h4 class="page-title">Database Explorer</h4>
             <div class="">
                 <ol class="breadcrumb mb-0">
-                    <li class="breadcrumb-item active">Dashboard</li>
+                    <li class="breadcrumb-item"><a href="{% url 'dataflow:home' %}">Datasets</a></li>
+                    <li class="breadcrumb-item active">DB Explorer</li>
                 </ol>
             </div>
         </div>
@@ -21,7 +21,7 @@
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <p class="text-muted mb-1">Total Datasets</p>
+                        <p class="text-muted mb-1">Total Tables</p>
                         <h3 class="mb-0">{{ stats.total }}</h3>
                     </div>
                     <div class="avatar-sm bg-primary-subtle text-primary rounded-2 fs-22 d-flex align-items-center justify-content-center">
@@ -36,11 +36,11 @@
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <p class="text-muted mb-1">Total Records</p>
-                        <h3 class="mb-0">{{ stats.records }}</h3>
+                        <p class="text-muted mb-1">Application Tables</p>
+                        <h3 class="mb-0">{{ stats.application }}</h3>
                     </div>
                     <div class="avatar-sm bg-success-subtle text-success rounded-2 fs-22 d-flex align-items-center justify-content-center">
-                        <i class="iconoir-table-2-rows"></i>
+                        <i class="iconoir-app-window"></i>
                     </div>
                 </div>
             </div>
@@ -51,11 +51,11 @@
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <p class="text-muted mb-1">Dynamic Tables</p>
-                        <h3 class="mb-0">{{ stats.schemas }}</h3>
+                        <p class="text-muted mb-1">System Tables</p>
+                        <h3 class="mb-0">{{ stats.system }}</h3>
                     </div>
                     <div class="avatar-sm bg-warning-subtle text-warning rounded-2 fs-22 d-flex align-items-center justify-content-center">
-                        <i class="iconoir-data-transfer-both"></i>
+                        <i class="iconoir-settings"></i>
                     </div>
                 </div>
             </div>
@@ -66,11 +66,11 @@
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <p class="text-muted mb-1">Cleaning Logs</p>
-                        <h3 class="mb-0">{{ stats.logs }}</h3>
+                        <p class="text-muted mb-1">Total Rows</p>
+                        <h3 class="mb-0">{{ stats.total_rows }}</h3>
                     </div>
                     <div class="avatar-sm bg-info-subtle text-info rounded-2 fs-22 d-flex align-items-center justify-content-center">
-                        <i class="iconoir-clipboard-check"></i>
+                        <i class="iconoir-table-2-rows"></i>
                     </div>
                 </div>
             </div>
@@ -84,59 +84,58 @@
             <div class="card-header">
                 <div class="row align-items-center">
                     <div class="col">
-                        <h4 class="card-title">All Datasets</h4>
+                        <h4 class="card-title">All Database Tables</h4>
                     </div>
                     <div class="col-auto">
-                        <a href="{% url 'dataflow:upload' %}" class="btn btn-primary">
-                            <i class="iconoir-upload-square-outline me-1"></i> Upload
-                        </a>
+                        <input type="search" id="table-search" class="form-control form-control-sm" placeholder="Filter tables..." onkeyup="filterTables()">
                     </div>
                 </div>
             </div>
             <div class="card-body pt-0">
-                {% if datasets %}
                 <div class="table-responsive">
-                    <table class="table mb-0">
+                    <table class="table mb-0" id="table-list">
                         <thead class="table-light">
                             <tr>
-                                <th>Name</th>
+                                <th>Table Name</th>
                                 <th>Rows</th>
-                                <th>Updated</th>
-                                <th class="text-end">Actions</th>
+                                <th>Columns</th>
+                                <th>Category</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for ds in datasets %}
-                            <tr>
+                            {% for t in tables %}
+                            <tr data-search="{{ t.name }} {{ t.category_label }}">
                                 <td>
-                                    <a href="{% url 'dataflow:dataset_detail' ds.id %}" class="fw-semibold text-dark">{{ ds.name }}</a>
-                                    {% if ds.is_ref %}<span class="badge bg-info-subtle text-info fs-11 ms-1">live</span>{% endif %}
+                                    <a href="{% url 'dataflow:db_explorer_table' t.name %}" class="fw-semibold text-dark">{{ t.name }}</a>
                                 </td>
-                                <td><span class="badge bg-primary-subtle text-primary">{{ ds.record_count }}</span></td>
-                                <td>{{ ds.updated_at|date:"Y-m-d H:i" }}</td>
-                                <td class="text-end">
-                                    <a href="{% url 'dataflow:dataset_detail' ds.id %}" class="btn btn-sm btn-soft-primary">View</a>
-                                    <a href="{% url 'dataflow:dataset_export' ds.id %}?format=csv" class="btn btn-sm btn-soft-success">CSV</a>
-                                    <button class="btn btn-sm btn-soft-danger"
-                                            hx-post="{% url 'dataflow:dataset_delete' ds.id %}"
-                                            hx-target="closest tr"
-                                            hx-swap="outerHTML"
-                                            hx-confirm="Delete '{{ ds.name }}'? This drops the dynamic table too.">Del</button>
+                                <td><span class="badge bg-primary-subtle text-primary">{{ t.row_count }}</span></td>
+                                <td>{{ t.col_count }}</td>
+                                <td>
+                                    <span class="badge fs-11 bg-{% if t.category == 'application' %}success{% elif t.category == 'dataflow' %}primary{% elif t.category == 'system' %}warning{% else %}info{% endif %}-subtle text-{% if t.category == 'application' %}success{% elif t.category == 'dataflow' %}primary{% elif t.category == 'system' %}warning{% else %}info{% endif %}">
+                                        {{ t.category_label }}
+                                    </span>
                                 </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="iconoir-database fs-1 text-muted"></i>
-                    <h5 class="mt-3">No datasets yet</h5>
-                    <p class="text-muted"><a href="{% url 'dataflow:upload' %}">Upload your first CSV</a> to get started.</p>
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterTables() {
+    var input = document.getElementById('table-search');
+    var filter = input.value.toLowerCase();
+    var rows = document.querySelectorAll('#table-list tbody tr');
+    rows.forEach(function(row) {
+        var text = row.getAttribute('data-search').toLowerCase();
+        row.style.display = text.includes(filter) ? '' : 'none';
+    });
+}
+</script>
 {% endblock %}

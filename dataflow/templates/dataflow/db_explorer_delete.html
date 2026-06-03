@@ -1,0 +1,44 @@
+{% extends "dataflow/base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-sm-12">
+        <div class="page-title-box d-md-flex justify-content-md-between align-items-center">
+            <h4 class="page-title">Delete Table</h4>
+            <div class="">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="{% url 'dataflow:db_explorer' %}">DB Explorer</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'dataflow:db_explorer_table' table_name %}">{{ table_name }}</a></li>
+                    <li class="breadcrumb-item active">Delete</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mx-auto">
+        <div class="card border-danger">
+            <div class="card-header bg-danger-subtle">
+                <h5 class="card-title text-danger mb-0">
+                    <i class="iconoir-warning-triangle me-2"></i>Danger: Drop Database Table
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>You are about to permanently drop the table:</p>
+                <div class="alert alert-danger text-center fs-5 fw-bold">{{ table_name }}</div>
+                <p class="text-danger fw-semibold">This action cannot be undone. All data in this table will be permanently lost.</p>
+                <p class="text-warning fw-semibold small">Any foreign key constraints from other tables referencing this table will also be dropped (CASCADE).</p>
+
+                <form method="post" class="mt-4">
+                    {% csrf_token %}
+                    <div class="d-flex gap-2 justify-content-center">
+                        <a href="{% url 'dataflow:db_explorer_table' table_name %}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-danger">Drop Table</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
