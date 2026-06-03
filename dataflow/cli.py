@@ -4,14 +4,14 @@
 ETL Pipeline — clean, format, store, and export data via Django.
 
 Usage:
-    python pipeline.py run data.csv --name "dataset"              # auto-infer rules
-    python pipeline.py run data.csv --name "dataset" -r rules.json  # with rules
-    python pipeline.py run data.csv --dry-run                       # preview only
-    python pipeline.py run data.csv --verbose                       # per-row progress
-    python pipeline.py run data.csv --quiet                         # errors only
-    python pipeline.py export "dataset" -o cleaned.csv              # export back
-    python pipeline.py report "dataset"                             # summary
-    python pipeline.py list                                         # list all datasets
+    python manage.py dataflow run data.csv --name "dataset"               # auto-infer rules
+    python manage.py dataflow run data.csv --name "dataset" -r rules.json  # with rules
+    python manage.py dataflow run data.csv --dry-run                       # preview only
+    python manage.py dataflow run data.csv --verbose                       # per-row progress
+    python manage.py dataflow run data.csv --quiet                         # errors only
+    python manage.py dataflow export "dataset" -o cleaned.csv              # export back
+    python manage.py dataflow report "dataset"                             # summary
+    python manage.py dataflow list                                         # list all datasets
 """
 import json
 import logging

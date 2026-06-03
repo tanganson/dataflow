@@ -15,6 +15,28 @@ from dataflow.schema_manager import SchemaManager
 from dataflow.cli import Pipeline, clean_dataset, delete_dataset as delete_dataset_fn
 
 PAGE_SIZE = 50
+PAGE_SIZE_OPTIONS = [50, 100, 200]
+
+
+def _get_page_size(request):
+    raw = request.GET.get('page_size', str(PAGE_SIZE)).lower()
+    if raw == 'all':
+        return None, 'all'
+    try:
+        page_size = int(raw)
+    except ValueError:
+        return PAGE_SIZE, str(PAGE_SIZE)
+    if page_size not in PAGE_SIZE_OPTIONS:
+        return PAGE_SIZE, str(PAGE_SIZE)
+    return page_size, str(page_size)
+
+
+def _page_size_context(page_size_param):
+    return {
+        'page_size': page_size_param,
+        'page_size_options': PAGE_SIZE_OPTIONS,
+        'showing_all': page_size_param == 'all',
+    }
 
 
 # ── Dashboard ──
@@ -157,16 +179,28 @@ def dataset_detail(request, dataset_id):
 
         columns = get_table_schema(ref_table)
         field_names = [c['name'] for c in columns]
-        page_num = int(request.GET.get('page', 1))
-        row_data, total_rows, col_names, pk_column = get_table_data(ref_table, page=page_num)
+        page_size, page_size_param = _get_page_size(request)
+        page_num = 1 if page_size is None else int(request.GET.get('page', 1))
 
-        paginator = Paginator(range(total_rows), PAGE_SIZE)
+        if page_size is None:
+            _, total_rows, col_names, pk_column = get_table_data(ref_table, page=1, page_size=1)
+            effective_page_size = total_rows or 1
+        else:
+            effective_page_size = page_size
+
+        row_data, total_rows, col_names, pk_column = get_table_data(
+            ref_table,
+            page=page_num,
+            page_size=effective_page_size,
+        )
+
+        paginator = Paginator(range(total_rows), effective_page_size)
         try:
             rows = paginator.page(page_num)
         except EmptyPage:
             rows = paginator.page(1)
 
-        return render(request, 'dataflow/dataset_detail.html', {
+        context = {
             'ds': ds,
             'schema': None,
             'field_names': field_names,
@@ -174,7 +208,9 @@ def dataset_detail(request, dataset_id):
             'row_data': row_data,
             'total_rows': total_rows,
             'logs': [],
-        })
+        }
+        context.update(_page_size_context(page_size_param))
+        return render(request, 'dataflow/dataset_detail.html', context)
 
     # Original logic for uploaded datasets
     ds.is_ref = False
@@ -194,8 +230,10 @@ def dataset_detail(request, dataset_id):
         queryset = DataRecord.objects.filter(dataset=ds).order_by('id')
         total_rows = queryset.count()
 
-    page = request.GET.get('page', 1)
-    paginator = Paginator(queryset, PAGE_SIZE)
+    page_size, page_size_param = _get_page_size(request)
+    page = 1 if page_size is None else request.GET.get('page', 1)
+    effective_page_size = (total_rows or 1) if page_size is None else page_size
+    paginator = Paginator(queryset, effective_page_size)
     try:
         rows = paginator.page(page)
     except EmptyPage:
@@ -214,7 +252,7 @@ def dataset_detail(request, dataset_id):
 
     logs = CleaningLog.objects.filter(dataset=ds).order_by('-created_at')[:5]
 
-    return render(request, 'dataflow/dataset_detail.html', {
+    context = {
         'ds': ds,
         'schema': schema,
         'field_names': field_names,
@@ -222,7 +260,9 @@ def dataset_detail(request, dataset_id):
         'row_data': row_data,
         'total_rows': total_rows,
         'logs': logs,
-    })
+    }
+    context.update(_page_size_context(page_size_param))
+    return render(request, 'dataflow/dataset_detail.html', context)
 
 
 # ── Re-clean (HTMX) ──
@@ -404,16 +444,28 @@ def db_explorer_table(request, table_name):
         raise Http404(f"Table '{table_name}' not found")
 
     columns = get_table_schema(table_name)
-    page_num = int(request.GET.get('page', 1))
-    rows, total, col_names, pk_column = get_table_data(table_name, page=page_num)
+    page_size, page_size_param = _get_page_size(request)
+    page_num = 1 if page_size is None else int(request.GET.get('page', 1))
 
-    paginator = Paginator(range(total), PAGE_SIZE)
+    if page_size is None:
+        _, total, col_names, pk_column = get_table_data(table_name, page=1, page_size=1)
+        effective_page_size = total or 1
+    else:
+        effective_page_size = page_size
+
+    rows, total, col_names, pk_column = get_table_data(
+        table_name,
+        page=page_num,
+        page_size=effective_page_size,
+    )
+
+    paginator = Paginator(range(total), effective_page_size)
     try:
         page_obj = paginator.page(page_num)
     except EmptyPage:
         page_obj = paginator.page(1)
 
-    return render(request, 'dataflow/db_explorer_table.html', {
+    context = {
         'table_name': table_name,
         'columns': columns,
         'row_data': rows,
@@ -421,7 +473,9 @@ def db_explorer_table(request, table_name):
         'total': total,
         'page_obj': page_obj,
         'pk_column': pk_column,
-    })
+    }
+    context.update(_page_size_context(page_size_param))
+    return render(request, 'dataflow/db_explorer_table.html', context)
 
 
 # ── DB Explorer: Export ──

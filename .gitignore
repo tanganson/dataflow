@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Build/package metadata
+*.egg-info/
+build/
+dist/
+
+# Local Django/demo state
+db.sqlite3
+output/
+static/
+
+# OS/editor noise
+.DS_Store
+.vscode/
+
+# Virtual environments
+.venv/
+venv/
+env/

@@ -50,18 +50,10 @@ python manage.py migrate
 ### 在本專案中（Demo）
 
 ```bash
-python pipeline.py run data.csv --name "DatasetName"
-```
-
-或使用 Django management command：
-
-```bash
 python manage.py dataflow run data.csv --name "DatasetName"
 ```
 
 ### 在其他專案中（pip install）
-
-統一使用 `manage.py`：
 
 ```bash
 python manage.py dataflow run data.csv --name "DatasetName"

@@ -1,12 +1,12 @@
 # CLI Reference Manual
 
-所有操作統一使用 `pipeline.py`。
+所有操作統一使用 Django management command：
 
 ```
-python pipeline.py {run,clean,delete,export,report,list,rules} [options]
+python manage.py dataflow {run,clean,delete,export,report,list,rules} [options]
 ```
 
-所有指令支援 `--verbose` / `-v`（詳細輸出）和 `--quiet` / `-q`（僅錯誤）。
+`run` 指令支援 `--verbose` / `-v`（詳細輸出）和 `--quiet` / `-q`（僅錯誤）。
 
 ---
 
@@ -15,7 +15,7 @@ python pipeline.py {run,clean,delete,export,report,list,rules} [options]
 讀取檔案、推斷型別、清洗、儲存到資料庫。
 
 ```bash
-python pipeline.py run <file> [--name NAME] [--rules RULES] [--replace] [--export EXPORT] [--dry-run] [--verbose|--quiet]
+python manage.py dataflow run <file> [--name NAME] [--rules RULES] [--replace] [--export EXPORT] [--dry-run] [--verbose|--quiet]
 ```
 
 | 參數 | 簡寫 | 必填 | 說明 |
@@ -32,14 +32,14 @@ python pipeline.py run <file> [--name NAME] [--rules RULES] [--replace] [--expor
 **範例：**
 
 ```bash
-python pipeline.py run data.csv                          # 最簡單：自動推斷 + 自動命名
-python pipeline.py run data.csv --name "用戶資料"         # 指定資料集名稱
-python pipeline.py run data.csv -n "電影" -r rules/movie_rules.json  # 使用自訂規則
-python pipeline.py run data.csv -n "電影" --replace       # 取代舊資料
-python pipeline.py run data.csv -n "電影" -o cleaned.csv  # 匯入同時匯出
-python pipeline.py run data.csv --dry-run                 # 預覽清洗結果，不寫入 DB
-python pipeline.py run data.csv --verbose                 # 顯示逐行進度（大檔案）
-python pipeline.py run data.csv --quiet                   # 只顯示錯誤
+python manage.py dataflow run data.csv                          # 最簡單：自動推斷 + 自動命名
+python manage.py dataflow run data.csv --name "用戶資料"         # 指定資料集名稱
+python manage.py dataflow run data.csv -n "電影" -r rules/movie_rules.json  # 使用自訂規則
+python manage.py dataflow run data.csv -n "電影" --replace       # 取代舊資料
+python manage.py dataflow run data.csv -n "電影" -o cleaned.csv  # 匯入同時匯出
+python manage.py dataflow run data.csv --dry-run                 # 預覽清洗結果，不寫入 DB
+python manage.py dataflow run data.csv --verbose                 # 顯示逐行進度（大檔案）
+python manage.py dataflow run data.csv --quiet                   # 只顯示錯誤
 ```
 
 ---
@@ -49,7 +49,7 @@ python pipeline.py run data.csv --quiet                   # 只顯示錯誤
 從資料庫取出原始資料，套用新規則重新清洗並取代舊資料。無需原始檔案。
 
 ```bash
-python pipeline.py clean <name> [--rules RULES]
+python manage.py dataflow clean <name> [--rules RULES]
 ```
 
 | 參數 | 簡寫 | 必填 | 說明 |
@@ -60,8 +60,8 @@ python pipeline.py clean <name> [--rules RULES]
 **範例：**
 
 ```bash
-python pipeline.py clean "電影"                                # 自動推斷規則
-python pipeline.py clean "電影" --rules rules/strict_rules.json  # 使用自訂規則
+python manage.py dataflow clean "電影"                                # 自動推斷規則
+python manage.py dataflow clean "電影" --rules rules/strict_rules.json  # 使用自訂規則
 ```
 
 ---
@@ -71,7 +71,7 @@ python pipeline.py clean "電影" --rules rules/strict_rules.json  # 使用自�
 從資料庫匯出已儲存的資料集到 `output/` 目錄。直接從動態 SQL table 讀取，型別保留。
 
 ```bash
-python pipeline.py export <name> --output <OUTPUT>
+python manage.py dataflow export <name> --output <OUTPUT>
 ```
 
 | 參數 | 簡寫 | 必填 | 說明 |
@@ -82,9 +82,9 @@ python pipeline.py export <name> --output <OUTPUT>
 **範例：**
 
 ```bash
-python pipeline.py export "電影" -o movies.csv
-python pipeline.py export "電影" -o movies.xlsx
-python pipeline.py export "電影" -o movies.json
+python manage.py dataflow export "電影" -o movies.csv
+python manage.py dataflow export "電影" -o movies.xlsx
+python manage.py dataflow export "電影" -o movies.json
 ```
 
 --- 
@@ -94,7 +94,7 @@ python pipeline.py export "電影" -o movies.json
 刪除資料集、動態 SQL table 及所有相關記錄。
 
 ```bash
-python pipeline.py delete <name>
+python manage.py dataflow delete <name>
 ```
 
 | 參數 | 簡寫 | 必填 | 說明 |
@@ -104,7 +104,7 @@ python pipeline.py delete <name>
 **範例：**
 
 ```bash
-python pipeline.py delete "電影"
+python manage.py dataflow delete "電影"
 ```
 
 ---
@@ -114,7 +114,7 @@ python pipeline.py delete "電影"
 顯示資料集的欄位型別、筆數、清洗記錄。
 
 ```bash
-python pipeline.py report <name>
+python manage.py dataflow report <name>
 ```
 
 | 參數 | 簡寫 | 必填 | 說明 |
@@ -124,7 +124,7 @@ python pipeline.py report <name>
 **範例：**
 
 ```bash
-python pipeline.py report "電影"
+python manage.py dataflow report "電影"
 ```
 
 ---
@@ -132,7 +132,7 @@ python pipeline.py report "電影"
 ## `list` — 列出所有資料集
 
 ```bash
-python pipeline.py list
+python manage.py dataflow list
 ```
 
 顯示 ID、名稱、記錄數、更新時間。
@@ -144,7 +144,7 @@ python pipeline.py list
 從 CSV 自動推斷每欄型別，產生可編輯的規則 JSON 檔到 `rules/` 目錄。
 
 ```bash
-python pipeline.py rules <file> [--output OUTPUT] [--sample SAMPLE]
+python manage.py dataflow rules <file> [--output OUTPUT] [--sample SAMPLE]
 ```
 
 | 參數 | 簡寫 | 必填 | 說明 |
@@ -156,9 +156,9 @@ python pipeline.py rules <file> [--output OUTPUT] [--sample SAMPLE]
 **範例：**
 
 ```bash
-python pipeline.py rules data.csv                         # → rules/data_rules.json
-python pipeline.py rules data.csv -o movie_rules.json     # → rules/movie_rules.json
-python pipeline.py rules data.csv -s 500                  # 取樣 500 筆
+python manage.py dataflow rules data.csv                         # → rules/data_rules.json
+python manage.py dataflow rules data.csv -o movie_rules.json     # → rules/movie_rules.json
+python manage.py dataflow rules data.csv -s 500                  # 取樣 500 筆
 ```
 
 ---
@@ -185,6 +185,8 @@ python pipeline.py rules data.csv -s 500                  # 取樣 500 筆
 | `lower` | `CharField(500)` | — |
 | `email` | `CharField(255)` | — |
 | `phone` | `CharField(20)` | — |
+| `url` | `URLField(500)` | 驗證 URL，自動補 https:// |
+| `image` | `URLField(500)` | 圖片 URL，同 url 驗證 |
 | `int` | `IntegerField` | `default`, `min`, `max` |
 | `float` | `FloatField` | `default`, `min`, `max` |
 | `decimal` | `DecimalField` | `default`, `min` |

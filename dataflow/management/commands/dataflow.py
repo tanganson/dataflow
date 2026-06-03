@@ -69,13 +69,16 @@ class Command(BaseCommand):
             _validate_file_exists,
         )
 
-        verbosity = options.get('verbosity', 1)
         subcommand = options['subcommand']
 
         # Configure logging
-        if verbosity >= 2:
+        if options.get('quiet'):
+            level = logging.WARNING
+        elif options.get('verbose'):
             level = logging.DEBUG
-        elif verbosity == 0:
+        elif options.get('verbosity', 1) >= 2:
+            level = logging.DEBUG
+        elif options.get('verbosity', 1) == 0:
             level = logging.WARNING
         else:
             level = logging.INFO

@@ -36,7 +36,10 @@ TYPE_CATEGORY = {
 
 def _field_type_name(type_code: int) -> str:
     mapping = connection.introspection.data_types_reverse
-    return mapping.get(type_code, f"unknown({type_code})")
+    try:
+        return mapping[type_code]
+    except KeyError:
+        return f"unknown({type_code})"
 
 
 def _categorize(table_name: str) -> str:

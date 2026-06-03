@@ -95,11 +95,22 @@
                     <div class="col">
                         <h4 class="card-title">Data</h4>
                     </div>
+                    <div class="col-auto">
+                        <form method="get" class="d-flex align-items-center gap-2">
+                            <label for="page_size" class="text-muted fs-13 mb-0">Rows</label>
+                            <select id="page_size" name="page_size" class="form-select form-select-sm" onchange="this.form.submit()">
+                                {% for option in page_size_options %}
+                                <option value="{{ option }}" {% if page_size == option|stringformat:"s" %}selected{% endif %}>{{ option }}</option>
+                                {% endfor %}
+                                <option value="all" {% if showing_all %}selected{% endif %}>All</option>
+                            </select>
+                        </form>
+                    </div>
                 </div>
             </div>
             <div class="card-body pt-0">
                 <div class="table-responsive">
-                    <table class="table datatable" id="datatable_1">
+                    <table class="table datatable" id="datatable_1" data-server-paged="true">
                         <thead class="table-light">
                             <tr>
                                 <th>#</th>
@@ -120,6 +131,42 @@
                         </tbody>
                     </table>
                 </div>
+
+                {% if rows.paginator.count %}
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+                    <div class="text-muted fs-13">
+                        Showing {{ rows.start_index }}-{{ rows.end_index }} of {{ total_rows }}
+                    </div>
+                    {% if rows.paginator.num_pages > 1 %}
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0">
+                            {% if rows.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ rows.previous_page_number }}&page_size={{ page_size }}">Prev</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">Prev</span></li>
+                            {% endif %}
+                            <li class="page-item disabled">
+                                <span class="page-link">{{ rows.number }} / {{ rows.paginator.num_pages }}</span>
+                            </li>
+                            {% if rows.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ rows.next_page_number }}&page_size={{ page_size }}">Next</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">Next</span></li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="iconoir-table-2-rows fs-1 text-muted"></i>
+                    <h5 class="mt-3">No data</h5>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

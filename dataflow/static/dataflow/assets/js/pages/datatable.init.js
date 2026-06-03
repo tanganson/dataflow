@@ -5,10 +5,18 @@
  */
 
 try{
- new simpleDatatables.DataTable("#datatable_1", {
+ const table = document.querySelector("#datatable_1");
+ const options = {
     searchable: true,
     fixedHeight: false,
-  })
+  };
+
+ if (table?.dataset.serverPaged === "true") {
+    options.paging = false;
+    options.perPageSelect = false;
+ }
+
+ new simpleDatatables.DataTable("#datatable_1", options)
 } catch (err) {}
 try{
   const dataTable_2 = new simpleDatatables.DataTable("#datatable_2")

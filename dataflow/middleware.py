@@ -1,7 +1,7 @@
 class RefreshDynamicAdminsMiddleware:
     """Re-register dynamic model admins on each admin request.
 
-    Dynamic models are created by pipeline.py in a separate process,
+    Dynamic models are created by the dataflow management command in a separate process,
     so the server must refresh its admin registry to pick up new ones.
     """
 
