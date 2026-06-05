@@ -19,22 +19,65 @@
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header">
-                <h4 class="card-title">Data File</h4>
-                <p class="text-muted mb-0">CSV, Excel, JSON, Parquet, Feather, or SQL Dump</p>
+                <h4 class="card-title">Data Source</h4>
+                <p class="text-muted mb-0">Single file or CSV folder</p>
             </div>
             <div class="card-body">
                 <form method="post" enctype="multipart/form-data">
                     {% csrf_token %}
 
                     <div class="mb-3">
-                        <label for="file" class="form-label">File *</label>
+                        <label class="form-label">Upload Mode</label>
+                        <div class="d-flex flex-wrap gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="upload_mode"
+                                       id="mode_file" value="file" checked>
+                                <label class="form-check-label" for="mode_file">Single file</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="upload_mode"
+                                       id="mode_folder" value="folder">
+                                <label class="form-check-label" for="mode_folder">CSV folder</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Target</label>
+                        <div class="d-flex flex-wrap gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="target_mode"
+                                       id="target_dataset" value="dataset">
+                                <label class="form-check-label" for="target_dataset">Dataflow datasets</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="target_mode"
+                                       id="target_table" value="table" checked>
+                                <label class="form-check-label" for="target_table">Existing DB tables</label>
+                            </div>
+                        </div>
+                        <div class="form-text" id="target_help">
+                            CSV data is inserted into existing tables that the website already reads.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="file" class="form-label">File</label>
                         <input class="form-control" type="file" id="file" name="file" required
                                accept=".csv,.xlsx,.xls,.json,.parquet,.feather,.sql">
+                        <div class="form-text">CSV, Excel, JSON, Parquet, Feather, or SQL dump.</div>
+                    </div>
+
+                    <div class="mb-3 d-none" id="folder_input_group">
+                        <label for="folder_files" class="form-label">Folder</label>
+                        <input class="form-control" type="file" id="folder_files" name="folder_files"
+                               accept=".csv" multiple webkitdirectory directory>
+                        <div class="form-text" id="folder_help">Every CSV file in the selected folder is imported as a separate dataset.</div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="name" class="form-label">Dataset Name</label>
+                            <label for="name" class="form-label">Dataset Name / Prefix</label>
                             <input type="text" class="form-control" id="name" name="name"
                                    placeholder="Auto-derived from filename">
                         </div>
@@ -53,6 +96,18 @@
                             </label>
                         </div>
                         <p class="text-warning small mb-0 mt-1">For SQL files: check this to DROP the table before re-creating it.</p>
+                        <p class="text-warning small mb-0 mt-1">For existing DB table imports: check this to DELETE current table rows before inserting CSV rows.</p>
+                    </div>
+
+                    <div class="mb-3">
+                        <input type="hidden" name="create_missing_tables" value="off">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="create_missing_tables"
+                                   name="create_missing_tables" value="on" checked>
+                            <label class="form-check-label" for="create_missing_tables">
+                                Create missing DB tables from CSV
+                            </label>
+                        </div>
                     </div>
 
                     <div class="mb-3">
@@ -75,4 +130,61 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const fileMode = document.getElementById('mode_file');
+    const folderMode = document.getElementById('mode_folder');
+    const fileInput = document.getElementById('file');
+    const folderGroup = document.getElementById('folder_input_group');
+    const folderInput = document.getElementById('folder_files');
+    const nameInput = document.getElementById('name');
+    const targetDataset = document.getElementById('target_dataset');
+    const targetTable = document.getElementById('target_table');
+    const targetHelp = document.getElementById('target_help');
+    const folderHelp = document.getElementById('folder_help');
+
+    function syncUploadMode() {
+        const isFolder = folderMode.checked;
+        if (isFolder && !targetTable.checked) {
+            targetTable.checked = true;
+        }
+        const isTable = targetTable.checked;
+        folderGroup.classList.toggle('d-none', !isFolder);
+        fileInput.closest('.mb-3').classList.toggle('d-none', isFolder);
+        fileInput.required = !isFolder;
+        folderInput.required = isFolder;
+
+        if (isTable) {
+            targetHelp.textContent = 'CSV data is inserted into existing tables that the website already reads.';
+            folderHelp.textContent = 'Each CSV filename must match an existing DB table name.';
+        } else {
+            targetHelp.textContent = 'Dataflow datasets create managed datasets and dynamic tables.';
+            folderHelp.textContent = 'Every CSV file in the selected folder is imported as a separate dataset.';
+        }
+
+        if (isFolder && isTable) {
+            fileInput.value = '';
+            nameInput.placeholder = 'CSV filenames must match existing table names';
+        } else if (isFolder) {
+            fileInput.value = '';
+            nameInput.placeholder = 'Optional prefix for each CSV dataset';
+        } else if (isTable) {
+            folderInput.value = '';
+            nameInput.placeholder = 'Target table name; blank uses filename';
+        } else {
+            folderInput.value = '';
+            nameInput.placeholder = 'Auto-derived from filename';
+        }
+    }
+
+    fileMode.addEventListener('change', syncUploadMode);
+    folderMode.addEventListener('change', syncUploadMode);
+    targetDataset.addEventListener('change', syncUploadMode);
+    targetTable.addEventListener('change', syncUploadMode);
+    syncUploadMode();
+});
+</script>
 {% endblock %}

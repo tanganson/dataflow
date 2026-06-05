@@ -6,9 +6,10 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import Http404, HttpResponse
 from django.contrib import messages
 from django.core.paginator import Paginator, EmptyPage
-from django.db import connection
+from django.db import connection, transaction
 from django.db.models import Count
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_POST
 
 from dataflow.models import Dataset, DataRecord, CleaningLog, DatasetSchema
 from dataflow.schema_manager import SchemaManager
@@ -16,6 +17,337 @@ from dataflow.cli import Pipeline, clean_dataset, delete_dataset as delete_datas
 
 PAGE_SIZE = 50
 PAGE_SIZE_OPTIONS = [50, 100, 200]
+SUPPORTED_UPLOAD_EXTENSIONS = ('.csv', '.xlsx', '.xls', '.json', '.parquet', '.feather')
+
+
+def _save_uploaded_file(uploaded_file, suffix):
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        for chunk in uploaded_file.chunks():
+            tmp.write(chunk)
+        tmp_path = tmp.name
+    if hasattr(uploaded_file, 'seek'):
+        uploaded_file.seek(0)
+    return tmp_path
+
+
+def _pipeline_dataset_name(uploaded_file, name='', use_prefix=False):
+    file_stem = os.path.splitext(os.path.basename(uploaded_file.name))[0]
+    file_stem = file_stem.strip() or 'dataset'
+    name = name.strip()
+    if use_prefix and name:
+        return f'{name}_{file_stem}'
+    return name or file_stem
+
+
+def _run_uploaded_pipeline(uploaded_file, dataset_name, rules_path=None, replace=False, dry_run=False):
+    ext = os.path.splitext(uploaded_file.name)[1].lower() or '.csv'
+    tmp_path = _save_uploaded_file(uploaded_file, ext)
+    try:
+        pipeline = Pipeline(dataset_name)
+        pipeline.load_file(tmp_path)
+
+        if rules_path:
+            pipeline.load_rules_file(rules_path)
+        else:
+            pipeline.auto_rules()
+
+        pipeline.clean()
+
+        result = {
+            'name': dataset_name,
+            'valid_rows': len(pipeline.valid_rows),
+            'invalid_rows': len(pipeline.raw_rows) - len(pipeline.valid_rows),
+            'total_rows': len(pipeline.raw_rows),
+            'columns': len(pipeline.rules),
+            'dataset': None,
+        }
+
+        if dry_run:
+            pipeline.report()
+            return result
+
+        pipeline.store(replace=replace)
+        result['dataset'] = pipeline.dataset_obj
+        return result
+    finally:
+        os.unlink(tmp_path)
+
+
+def _normalize_db_value(value):
+    if value is None:
+        return None
+    try:
+        import pandas as pd
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, str) and value.strip() == '':
+        return None
+    return value
+
+
+def _db_field_type_name(column):
+    try:
+        return connection.introspection.data_types_reverse[column.type_code]
+    except KeyError:
+        return ''
+
+
+def _is_empty_import_value(value):
+    if value is None:
+        return True
+    try:
+        import pandas as pd
+        if pd.isna(value):
+            return True
+    except (TypeError, ValueError):
+        pass
+    return isinstance(value, str) and value.strip() == ''
+
+
+def _fallback_for_column(column):
+    type_name = _db_field_type_name(column)
+    if type_name in (
+        'CharField',
+        'TextField',
+        'SlugField',
+        'EmailField',
+        'URLField',
+        'FileField',
+        'ImageField',
+    ):
+        return ''
+    if type_name == 'BooleanField':
+        return False
+    if type_name in (
+        'IntegerField',
+        'BigIntegerField',
+        'SmallIntegerField',
+        'PositiveIntegerField',
+        'PositiveSmallIntegerField',
+        'FloatField',
+        'DecimalField',
+    ):
+        return 0
+    if type_name == 'JSONField':
+        return {}
+    return None
+
+
+def _normalize_db_value_for_column(value, column):
+    if not _is_empty_import_value(value):
+        return value
+    if column.null_ok:
+        return None
+    return _fallback_for_column(column)
+
+
+def _reset_table_sequence(table_name, pk_column):
+    if connection.vendor != 'postgresql' or not pk_column:
+        return
+
+    quoted_table = connection.ops.quote_name(table_name)
+    quoted_pk = connection.ops.quote_name(pk_column)
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_get_serial_sequence(%s, %s)', [table_name, pk_column])
+        sequence_name = cursor.fetchone()[0]
+        if not sequence_name:
+            return
+        cursor.execute(
+            """
+            SELECT setval(
+                %s,
+                COALESCE((SELECT MAX({quoted_pk}) FROM {quoted_table}), 1),
+                (SELECT MAX({quoted_pk}) FROM {quoted_table}) IS NOT NULL
+            )
+            """.format(quoted_pk=quoted_pk, quoted_table=quoted_table),
+            [sequence_name],
+        )
+
+
+def _import_uploaded_csv_to_table(uploaded_file, table_name, replace=False, dry_run=False):
+    ext = os.path.splitext(uploaded_file.name)[1].lower()
+    if ext != '.csv':
+        raise ValueError('Only CSV files can be imported into existing DB tables.')
+
+    table_name = table_name.strip()
+    if not table_name:
+        raise ValueError('Target table name is required.')
+    if table_name not in connection.introspection.table_names():
+        raise ValueError(f'Target table "{table_name}" does not exist.')
+
+    tmp_path = _save_uploaded_file(uploaded_file, '.csv')
+    try:
+        import pandas as pd
+
+        df = pd.read_csv(tmp_path)
+        records = df.to_dict(orient='records')
+
+        with connection.cursor() as cursor:
+            raw_cols = connection.introspection.get_table_description(cursor, table_name)
+            pk_column = connection.introspection.get_primary_key_column(cursor, table_name)
+
+        table_columns = [col.name for col in raw_cols]
+        column_map = {col.name: col for col in raw_cols}
+        csv_columns = [str(col) for col in df.columns]
+        insert_columns = [col for col in csv_columns if col in table_columns]
+        skipped_columns = [col for col in csv_columns if col not in table_columns]
+
+        if pk_column in insert_columns:
+            pk_values = [row.get(pk_column) for row in records]
+            if all(_is_empty_import_value(value) for value in pk_values):
+                insert_columns.remove(pk_column)
+
+        for col in raw_cols:
+            if col.name in insert_columns or col.name == pk_column:
+                continue
+            if not col.null_ok and _fallback_for_column(col) is not None:
+                insert_columns.append(col.name)
+
+        if records and not insert_columns:
+            raise ValueError(f'No CSV columns match columns in table "{table_name}".')
+
+        result = {
+            'table': table_name,
+            'rows': len(records),
+            'columns': len(insert_columns),
+            'skipped_columns': skipped_columns,
+            'dry_run': dry_run,
+        }
+
+        if dry_run:
+            return result
+
+        quoted_table = connection.ops.quote_name(table_name)
+        quoted_cols = [connection.ops.quote_name(col) for col in insert_columns]
+        placeholders = ', '.join(['%s'] * len(insert_columns))
+        insert_sql = (
+            f'INSERT INTO {quoted_table} ({", ".join(quoted_cols)}) '
+            f'VALUES ({placeholders})'
+        )
+        values = [
+            [_normalize_db_value_for_column(row.get(col), column_map[col]) for col in insert_columns]
+            for row in records
+        ]
+
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                if replace:
+                    cursor.execute(f'DELETE FROM {quoted_table}')
+                if values:
+                    cursor.executemany(insert_sql, values)
+            _reset_table_sequence(table_name, pk_column)
+
+        return result
+    finally:
+        os.unlink(tmp_path)
+
+
+def _delete_dataset_object(dataset):
+    schema = DatasetSchema.objects.filter(dataset=dataset).first()
+    if schema and SchemaManager.table_exists(schema.table_name):
+        SchemaManager.drop_table(schema.table_name)
+    dataset.delete()
+
+
+def _is_protected_table(table_name):
+    protected_prefixes = ('auth_', 'django_', 'dataflow_')
+    return table_name.startswith(protected_prefixes)
+
+
+def _drop_db_table(table_name, cascade=False):
+    quoted = connection.ops.quote_name(table_name)
+    cascade_sql = ' CASCADE' if cascade and connection.vendor == 'postgresql' else ''
+    with connection.cursor() as cursor:
+        cursor.execute(f'DROP TABLE IF EXISTS {quoted}{cascade_sql}')
+
+
+def _sql_type_for_series(series):
+    import pandas as pd
+
+    if pd.api.types.is_bool_dtype(series):
+        return 'BOOLEAN'
+    if pd.api.types.is_integer_dtype(series):
+        return 'BIGINT'
+    if pd.api.types.is_float_dtype(series):
+        return 'DOUBLE PRECISION' if connection.vendor == 'postgresql' else 'REAL'
+    return 'TEXT'
+
+
+def _create_table_from_csv(uploaded_file, table_name):
+    ext = os.path.splitext(uploaded_file.name)[1].lower()
+    if ext != '.csv':
+        raise ValueError('Only CSV files can create missing DB tables.')
+
+    tmp_path = _save_uploaded_file(uploaded_file, '.csv')
+    try:
+        import pandas as pd
+
+        df = pd.read_csv(tmp_path, nrows=200)
+        columns = [str(col) for col in df.columns]
+        if not columns:
+            raise ValueError(f'Cannot create table "{table_name}" from a CSV with no columns.')
+
+        col_defs = []
+        used = set()
+        for col_name in columns:
+            if col_name in used:
+                continue
+            used.add(col_name)
+            quoted_col = connection.ops.quote_name(col_name)
+            sql_type = _sql_type_for_series(df[col_name])
+            pk_sql = ' PRIMARY KEY' if col_name == 'id' else ''
+            col_defs.append(f'{quoted_col} {sql_type}{pk_sql}')
+
+        quoted_table = connection.ops.quote_name(table_name)
+        with connection.cursor() as cursor:
+            cursor.execute(f'CREATE TABLE {quoted_table} ({", ".join(col_defs)})')
+    finally:
+        os.unlink(tmp_path)
+
+
+def _table_dependencies(table_names):
+    selected = set(table_names)
+    dependencies = {table_name: set() for table_name in table_names}
+    with connection.cursor() as cursor:
+        for table_name in table_names:
+            constraints = connection.introspection.get_constraints(cursor, table_name)
+            for constraint in constraints.values():
+                foreign_key = constraint.get('foreign_key')
+                if foreign_key:
+                    parent_table = foreign_key[0]
+                    if parent_table in selected:
+                        dependencies[table_name].add(parent_table)
+    return dependencies
+
+
+def _sort_tables_for_import(table_names):
+    dependencies = _table_dependencies(table_names)
+    remaining = list(table_names)
+    ordered = []
+
+    while remaining:
+        ready = [
+            table_name for table_name in remaining
+            if dependencies[table_name].isdisjoint(remaining)
+        ]
+        if not ready:
+            ordered.extend(remaining)
+            break
+        for table_name in ready:
+            ordered.append(table_name)
+            remaining.remove(table_name)
+
+    return ordered
+
+
+def _delete_table_rows_for_replace(table_names):
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            for table_name in reversed(table_names):
+                quoted_table = connection.ops.quote_name(table_name)
+                cursor.execute(f'DELETE FROM {quoted_table}')
 
 
 def _get_page_size(request):
@@ -65,19 +397,139 @@ def home(request):
 def upload(request):
     if request.method == 'POST':
         file = request.FILES.get('file')
+        folder_files = request.FILES.getlist('folder_files')
         name = request.POST.get('name', '').strip()
+        target_mode = request.POST.get('target_mode')
         rules_file = request.FILES.get('rules_file')
         replace = request.POST.get('replace') == 'on'
         dry_run = request.POST.get('dry_run') == 'on'
+        create_missing_tables = request.POST.get('create_missing_tables', 'on') == 'on'
 
-        if not file:
-            messages.error(request, 'Please select a file.')
+        if not file and not folder_files:
+            messages.error(request, 'Please select a file or a folder.')
             return render(request, 'dataflow/upload.html')
+
+        if target_mode not in ('dataset', 'table'):
+            target_mode = 'table' if folder_files else 'dataset'
+
+        rules_path = None
+        if rules_file:
+            rules_path = _save_uploaded_file(rules_file, '.json')
+
+        if folder_files:
+            csv_files = [
+                uploaded_file for uploaded_file in folder_files
+                if os.path.splitext(uploaded_file.name)[1].lower() == '.csv'
+            ]
+
+            if not csv_files:
+                if rules_path:
+                    os.unlink(rules_path)
+                messages.error(request, 'No CSV files were found in the selected folder.')
+                return render(request, 'dataflow/upload.html')
+
+            imported = []
+            failed = []
+            skipped_missing = []
+            created_missing = []
+            try:
+                if target_mode == 'table':
+                    existing_tables = set(connection.introspection.table_names())
+                    table_files = {}
+                    for uploaded_file in csv_files:
+                        table_name = os.path.splitext(os.path.basename(uploaded_file.name))[0]
+                        if table_name not in existing_tables:
+                            if create_missing_tables and not dry_run:
+                                try:
+                                    _create_table_from_csv(uploaded_file, table_name)
+                                    existing_tables.add(table_name)
+                                    created_missing.append(table_name)
+                                except Exception as exc:
+                                    failed.append(f'{uploaded_file.name}: Could not create table "{table_name}": {exc}')
+                                    continue
+                            else:
+                                skipped_missing.append(f'{uploaded_file.name}: "{table_name}"')
+                                continue
+                        table_files[table_name] = uploaded_file
+
+                    ordered_tables = _sort_tables_for_import(list(table_files.keys()))
+                    if replace and ordered_tables and not dry_run:
+                        try:
+                            _delete_table_rows_for_replace(ordered_tables)
+                        except Exception as exc:
+                            failed.append(f'Replace selected tables: {exc}')
+                            ordered_tables = []
+
+                    for table_name in ordered_tables:
+                        uploaded_file = table_files[table_name]
+                        try:
+                            imported.append(_import_uploaded_csv_to_table(
+                                uploaded_file,
+                                table_name,
+                                replace=False,
+                                dry_run=dry_run,
+                            ))
+                        except Exception as exc:
+                            failed.append(f'{uploaded_file.name}: {exc}')
+                else:
+                    for uploaded_file in csv_files:
+                        target_name = _pipeline_dataset_name(
+                            uploaded_file,
+                            name,
+                            use_prefix=True,
+                        )
+                        try:
+                            imported.append(_run_uploaded_pipeline(
+                                uploaded_file,
+                                target_name,
+                                rules_path=rules_path,
+                                replace=replace,
+                                dry_run=dry_run,
+                            ))
+                        except Exception as exc:
+                            failed.append(f'{uploaded_file.name}: {exc}')
+            finally:
+                if rules_path:
+                    os.unlink(rules_path)
+
+            if imported:
+                action = 'Dry-run checked' if dry_run else 'Imported'
+                if target_mode == 'table':
+                    total_rows = sum(item['rows'] for item in imported)
+                    messages.success(
+                        request,
+                        f'{action} {len(imported)} existing DB table(s) from folder: {total_rows} rows.'
+                    )
+                else:
+                    total_rows = sum(item['valid_rows'] for item in imported)
+                    messages.success(
+                        request,
+                        f'{action} {len(imported)} CSV dataset(s) from folder: {total_rows} valid rows.'
+                    )
+
+            if failed:
+                sample = '; '.join(failed[:5])
+                extra = f' ({len(failed) - 5} more)' if len(failed) > 5 else ''
+                messages.warning(request, f'{len(failed)} CSV file(s) failed: {sample}{extra}')
+
+            if created_missing:
+                sample = ', '.join(created_missing[:5])
+                extra = f' ({len(created_missing) - 5} more)' if len(created_missing) > 5 else ''
+                messages.info(request, f'Created {len(created_missing)} missing DB table(s): {sample}{extra}')
+
+            if skipped_missing:
+                sample = '; '.join(skipped_missing[:5])
+                extra = f' ({len(skipped_missing) - 5} more)' if len(skipped_missing) > 5 else ''
+                messages.info(request, f'Skipped {len(skipped_missing)} CSV file(s) with no matching DB table: {sample}{extra}')
+
+            return redirect('dataflow:home')
 
         ext = os.path.splitext(file.name)[1].lower() or '.csv'
 
         # ── SQL file import: execute directly against database ──
         if ext == '.sql':
+            if rules_path:
+                os.unlink(rules_path)
             sql_content = file.read().decode('utf-8')
             statements = [s.strip() for s in sql_content.split(';') if s.strip()]
 
@@ -93,8 +545,7 @@ def upload(request):
                     break
 
             if replace and table_name:
-                with connection.cursor() as cursor:
-                    cursor.execute(f'DROP TABLE IF EXISTS {connection.ops.quote_name(table_name)} CASCADE')
+                _drop_db_table(table_name, cascade=True)
 
             executed = 0
             errors = []
@@ -120,49 +571,98 @@ def upload(request):
                     f'Table restored to DB Explorer.')
             return redirect('dataflow:db_explorer')
 
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-            for chunk in file.chunks():
-                tmp.write(chunk)
-            tmp_path = tmp.name
+        if ext not in SUPPORTED_UPLOAD_EXTENSIONS:
+            if rules_path:
+                os.unlink(rules_path)
+            messages.error(request, f'Unsupported file format: {ext}')
+            return render(request, 'dataflow/upload.html')
 
-        rules_path = None
-        if rules_file:
-            with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp:
-                for chunk in rules_file.chunks():
-                    tmp.write(chunk)
-                rules_path = tmp.name
+        if target_mode == 'table':
+            try:
+                table_name = name or os.path.splitext(os.path.basename(file.name))[0]
+                created_table = False
+                if table_name not in connection.introspection.table_names():
+                    if create_missing_tables and not dry_run:
+                        _create_table_from_csv(file, table_name)
+                        created_table = True
+                    else:
+                        raise ValueError(f'Target table "{table_name}" does not exist.')
+
+                result = _import_uploaded_csv_to_table(
+                    file,
+                    table_name,
+                    replace=replace,
+                    dry_run=dry_run,
+                )
+                action = 'Dry-run checked' if dry_run else 'Imported'
+                skipped = ''
+                if result['skipped_columns']:
+                    skipped = f' Skipped columns not in table: {", ".join(result["skipped_columns"][:5])}.'
+                created = f' Created missing table "{table_name}".' if created_table else ''
+                messages.success(
+                    request,
+                    f'{action} "{file.name}" into table "{result["table"]}": '
+                    f'{result["rows"]} rows, {result["columns"]} matched columns.{created}{skipped}'
+                )
+                if dry_run:
+                    return redirect('dataflow:db_explorer')
+                return redirect('dataflow:db_explorer_table', table_name=result['table'])
+            finally:
+                if rules_path:
+                    os.unlink(rules_path)
 
         try:
-            pipeline = Pipeline(name or os.path.splitext(file.name)[0])
-            pipeline.load_file(tmp_path)
-
-            if rules_path:
-                pipeline.load_rules_file(rules_path)
-            else:
-                pipeline.auto_rules()
-
-            pipeline.clean()
-
+            result = _run_uploaded_pipeline(
+                file,
+                _pipeline_dataset_name(file, name),
+                rules_path=rules_path,
+                replace=replace,
+                dry_run=dry_run,
+            )
             if dry_run:
-                pipeline.report()
                 messages.info(request,
-                    f'Dry-run: {len(pipeline.valid_rows)} valid, '
-                    f'{len(pipeline.raw_rows) - len(pipeline.valid_rows)} invalid '
-                    f'out of {len(pipeline.raw_rows)} rows.')
+                    f'Dry-run: {result["valid_rows"]} valid, '
+                    f'{result["invalid_rows"]} invalid '
+                    f'out of {result["total_rows"]} rows.')
                 return redirect('dataflow:home')
             else:
-                pipeline.store(replace=replace)
-                ds = pipeline.dataset_obj
+                ds = result['dataset']
                 messages.success(request,
-                    f'Imported "{ds.name}": {len(pipeline.valid_rows)} rows, '
-                    f'{len(pipeline.rules)} columns.')
+                    f'Imported "{ds.name}": {result["valid_rows"]} rows, '
+                    f'{result["columns"]} columns.')
                 return redirect('dataflow:dataset_detail', dataset_id=ds.id)
         finally:
-            os.unlink(tmp_path)
             if rules_path:
                 os.unlink(rules_path)
 
     return render(request, 'dataflow/upload.html')
+
+
+@require_POST
+def dataset_bulk_action(request):
+    action = request.POST.get('bulk_action', '').strip()
+    raw_ids = request.POST.getlist('dataset_ids')
+
+    dataset_ids = []
+    for raw_id in raw_ids:
+        try:
+            dataset_ids.append(int(raw_id))
+        except (TypeError, ValueError):
+            continue
+
+    if not dataset_ids:
+        messages.warning(request, 'No datasets selected.')
+        return redirect('dataflow:home')
+
+    datasets = list(Dataset.objects.filter(id__in=dataset_ids))
+    if action == 'delete':
+        for dataset in datasets:
+            _delete_dataset_object(dataset)
+        messages.success(request, f'Deleted {len(datasets)} selected dataset(s).')
+    else:
+        messages.error(request, 'Unsupported dataset bulk action.')
+
+    return redirect('dataflow:home')
 
 
 # ── Dataset Detail ──
@@ -437,6 +937,51 @@ def db_explorer(request):
     })
 
 
+@require_POST
+def db_explorer_bulk_action(request):
+    action = request.POST.get('bulk_action', '').strip()
+    selected_tables = request.POST.getlist('table_names')
+    existing_tables = set(connection.introspection.table_names())
+    table_names = [name for name in selected_tables if name in existing_tables]
+
+    if not table_names:
+        messages.warning(request, 'No database tables selected.')
+        return redirect('dataflow:db_explorer')
+
+    if action == 'link_dataset':
+        linked = 0
+        for table_name in table_names:
+            Dataset.objects.filter(name=table_name).delete()
+            Dataset.objects.create(
+                name=table_name,
+                description=f'__ref:{table_name}',
+                raw_data=[],
+            )
+            linked += 1
+        messages.success(request, f'Linked {linked} selected table(s) as live datasets.')
+
+    elif action == 'drop':
+        protected = [name for name in table_names if _is_protected_table(name)]
+        droppable = [name for name in table_names if name not in protected]
+
+        for table_name in droppable:
+            Dataset.objects.filter(name=table_name).delete()
+            _drop_db_table(table_name, cascade=True)
+
+        if droppable:
+            messages.success(request, f'Dropped {len(droppable)} selected table(s).')
+        if protected:
+            messages.warning(
+                request,
+                f'Skipped {len(protected)} protected table(s): {", ".join(protected[:5])}.'
+            )
+
+    else:
+        messages.error(request, 'Unsupported database table bulk action.')
+
+    return redirect('dataflow:db_explorer')
+
+
 def db_explorer_table(request, table_name):
     from .db_explorer import get_table_data, get_table_schema
 
@@ -622,9 +1167,7 @@ def db_explorer_delete(request, table_name):
         from dataflow.models import Dataset
         Dataset.objects.filter(name=table_name).delete()
 
-        quoted = connection.ops.quote_name(table_name)
-        with connection.cursor() as cursor:
-            cursor.execute(f"DROP TABLE IF EXISTS {quoted} CASCADE")
+        _drop_db_table(table_name, cascade=True)
 
         messages.success(request, f'Table "{table_name}" dropped.')
         return redirect('dataflow:db_explorer')

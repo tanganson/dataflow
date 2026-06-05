@@ -87,6 +87,19 @@
                         <h4 class="card-title">All Datasets</h4>
                     </div>
                     <div class="col-auto">
+                        <span class="badge bg-primary-subtle text-primary" id="selected-dataset-count">0 selected</span>
+                    </div>
+                    <div class="col-auto">
+                        <form method="post" action="{% url 'dataflow:dataset_bulk_action' %}" id="dataset-bulk-form" class="d-flex gap-2">
+                            {% csrf_token %}
+                            <select class="form-select form-select-sm" name="bulk_action" id="dataset-bulk-action" disabled>
+                                <option value="">Action...</option>
+                                <option value="delete">Delete selected</option>
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-outline-primary" id="dataset-bulk-apply" disabled>Apply</button>
+                        </form>
+                    </div>
+                    <div class="col-auto">
                         <a href="{% url 'dataflow:upload' %}" class="btn btn-primary">
                             <i class="iconoir-upload-square-outline me-1"></i> Upload
                         </a>
@@ -99,6 +112,9 @@
                     <table class="table mb-0">
                         <thead class="table-light">
                             <tr>
+                                <th style="width: 44px;">
+                                    <input class="form-check-input" type="checkbox" id="select-all-datasets" aria-label="Select all datasets">
+                                </th>
                                 <th>Name</th>
                                 <th>Rows</th>
                                 <th>Updated</th>
@@ -108,6 +124,9 @@
                         <tbody>
                             {% for ds in datasets %}
                             <tr>
+                                <td>
+                                    <input class="form-check-input dataset-select" type="checkbox" value="{{ ds.id }}" aria-label="Select {{ ds.name }}">
+                                </td>
                                 <td>
                                     <a href="{% url 'dataflow:dataset_detail' ds.id %}" class="fw-semibold text-dark">{{ ds.name }}</a>
                                     {% if ds.is_ref %}<span class="badge bg-info-subtle text-info fs-11 ms-1">live</span>{% endif %}
@@ -139,4 +158,67 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var selectAll = document.getElementById('select-all-datasets');
+    var checks = Array.from(document.querySelectorAll('.dataset-select'));
+    var selectedCount = document.getElementById('selected-dataset-count');
+    var bulkForm = document.getElementById('dataset-bulk-form');
+    var bulkAction = document.getElementById('dataset-bulk-action');
+    var bulkApply = document.getElementById('dataset-bulk-apply');
+
+    if (!selectAll || !selectedCount) {
+        return;
+    }
+
+    function syncDatasetSelection() {
+        var selected = checks.filter(function(check) { return check.checked; });
+        selectedCount.textContent = selected.length + ' selected';
+        selectAll.checked = checks.length > 0 && selected.length === checks.length;
+        selectAll.indeterminate = selected.length > 0 && selected.length < checks.length;
+        bulkAction.disabled = selected.length === 0;
+        bulkApply.disabled = selected.length === 0;
+    }
+
+    selectAll.addEventListener('change', function () {
+        checks.forEach(function(check) {
+            check.checked = selectAll.checked;
+        });
+        syncDatasetSelection();
+    });
+
+    checks.forEach(function(check) {
+        check.addEventListener('change', syncDatasetSelection);
+    });
+
+    bulkForm.addEventListener('submit', function(event) {
+        var selected = checks.filter(function(check) { return check.checked; });
+        if (!bulkAction.value || selected.length === 0) {
+            event.preventDefault();
+            return;
+        }
+
+        if (bulkAction.value === 'delete' && !window.confirm('Delete ' + selected.length + ' selected dataset(s)?')) {
+            event.preventDefault();
+            return;
+        }
+
+        bulkForm.querySelectorAll('input[name="dataset_ids"]').forEach(function(input) {
+            input.remove();
+        });
+        selected.forEach(function(check) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'dataset_ids';
+            input.value = check.value;
+            bulkForm.appendChild(input);
+        });
+    });
+
+    syncDatasetSelection();
+});
+</script>
 {% endblock %}
