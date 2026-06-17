@@ -110,7 +110,6 @@ def run_wizard():
         _print_table_list(sys_tables)
     if not app_tables and not sys_tables:
         print('  (no tables found)')
-    datasets = list(Dataset.objects.all().order_by('-updated_at'))
 
     # ── Step 2: Choose action ──
     _step(2, 'What do you want to do?')
