@@ -82,26 +82,29 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <div class="row align-items-center">
-                    <div class="col">
+                <div class="row align-items-center dataflow-card-header-row">
+                    <div class="col-12 col-xxl">
                         <h4 class="card-title">All Database Tables</h4>
                     </div>
-                    <div class="col-auto">
-                        <span class="badge bg-primary-subtle text-primary" id="selected-table-count">0 selected</span>
-                    </div>
-                    <div class="col-auto">
-                        <form method="post" action="{% url 'dataflow:db_explorer_bulk_action' %}" id="table-bulk-form" class="d-flex gap-2">
-                            {% csrf_token %}
-                            <select class="form-select form-select-sm" name="bulk_action" id="table-bulk-action" disabled>
-                                <option value="">Action...</option>
-                                <option value="link_dataset">Link as datasets</option>
-                                <option value="drop">Drop selected tables</option>
-                            </select>
-                            <button type="submit" class="btn btn-sm btn-outline-primary" id="table-bulk-apply" disabled>Apply</button>
-                        </form>
-                    </div>
-                    <div class="col-auto">
-                        <input type="search" id="table-search" class="form-control form-control-sm" placeholder="Filter tables..." onkeyup="filterTables()">
+                    <div class="col-12 col-xxl-auto">
+                        <div class="dataflow-header-controls">
+                            <span class="badge bg-primary-subtle text-primary" id="selected-table-count">0 selected</span>
+                            <form method="post" action="{% url 'dataflow:db_explorer_bulk_action' %}" id="table-bulk-form" class="d-flex dataflow-toolbar dataflow-bulk-form">
+                                {% csrf_token %}
+                                <div class="input-group input-group-sm dataflow-bulk-group">
+                                    <select class="form-select dataflow-action-select" name="bulk_action" id="table-bulk-action" disabled>
+                                        <option value="">Action...</option>
+                                        <option value="export_csv">Export as CSV (zip)</option>
+                                        <option value="export_xlsx">Export as Excel (zip)</option>
+                                        <option value="export_json">Export as JSON (zip)</option>
+                                        <option value="truncate">Clear data (keep structure)</option>
+                                        <option value="drop">Drop selected tables</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-outline-primary" id="table-bulk-apply" disabled>Apply</button>
+                                </div>
+                            </form>
+                            <input type="search" id="table-search" class="form-control form-control-sm dataflow-search" placeholder="Filter tables..." onkeyup="filterTables()">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -117,6 +120,7 @@
                                 <th>Rows</th>
                                 <th>Columns</th>
                                 <th>Category</th>
+                                <th>Export</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -127,13 +131,29 @@
                                 </td>
                                 <td>
                                     <a href="{% url 'dataflow:db_explorer_table' t.name %}" class="fw-semibold text-dark">{{ t.name }}</a>
+                                    {% if not t.can_drop_schema %}
+                                    <span class="badge bg-secondary-subtle text-secondary ms-1">schema protected</span>
+                                    {% endif %}
                                 </td>
                                 <td><span class="badge bg-primary-subtle text-primary">{{ t.row_count }}</span></td>
                                 <td>{{ t.col_count }}</td>
                                 <td>
-                                    <span class="badge fs-11 bg-{% if t.category == 'application' %}success{% elif t.category == 'dataflow' %}primary{% elif t.category == 'system' %}warning{% else %}info{% endif %}-subtle text-{% if t.category == 'application' %}success{% elif t.category == 'dataflow' %}primary{% elif t.category == 'system' %}warning{% else %}info{% endif %}">
+                                    <span class="badge fs-11 bg-{% if t.category == 'django-app' %}success{% elif t.category == 'dataflow-managed' or t.category == 'dataflow-core' %}primary{% elif t.category == 'system' %}warning{% else %}info{% endif %}-subtle text-{% if t.category == 'django-app' %}success{% elif t.category == 'dataflow-managed' or t.category == 'dataflow-core' %}primary{% elif t.category == 'system' %}warning{% else %}info{% endif %}">
                                         {{ t.category_label }}
                                     </span>
+                                </td>
+                                <td>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                            <i class="iconoir-export me-1"></i>Export
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li><a class="dropdown-item" href="{% url 'dataflow:db_explorer_export' t.name %}?format=csv">CSV</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'dataflow:db_explorer_export' t.name %}?format=xlsx">Excel</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'dataflow:db_explorer_export' t.name %}?format=json">JSON</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'dataflow:db_explorer_export' t.name %}?format=sql">SQL Dump</a></li>
+                                        </ul>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}

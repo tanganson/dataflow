@@ -3,479 +3,483 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DataFlow Manager — 新手入門指南</title>
+<title>DataFlow Manager — 架構技術文件</title>
 <style>
-  :root { --blue:#2563eb; --green:#0d9488; --amber:#d97706; --red:#dc2626; --purple:#7c3aed; --bg:#fafbfc; --card:#fff; --border:#e2e5ea; --text:#1a1a2e; --muted:#687083; }
-  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; margin: 0; }
-  .hero { background: #0f172a; color: #fff; padding: 60px 24px 50px; text-align: center; }
-  .hero h1 { font-size: 38px; font-weight: 800; margin: 0; }
-  .hero p { font-size: 18px; color: #94a3b8; margin: 8px 0 0; }
-  .container { max-width: 820px; margin: 0 auto; padding: 32px 20px 60px; }
-  h2 { font-size: 24px; margin: 48px 0 16px; padding-bottom: 10px; border-bottom: 2px solid var(--border); }
-  h3 { font-size: 18px; margin: 28px 0 10px; }
-  h4 { font-size: 15px; margin: 16px 0 6px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 16px; }
-  .card-blue { border-left: 4px solid var(--blue); }
-  .card-green { border-left: 4px solid var(--green); }
-  .card-amber { border-left: 4px solid var(--amber); }
-  .card-purple { border-left: 4px solid var(--purple); }
-  .tip { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 14px 18px; margin: 16px 0; font-size: 14px; }
-  .tip::before { content: "💡 新手提示："; font-weight: 700; }
-  .icon-row { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; text-align: center; margin: 24px 0; }
-  .icon-item { flex: 0 0 120px; }
-  .icon-item .emoji { font-size: 32px; }
-  .icon-item .label { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
-  .flow { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; justify-content: center; padding: 20px 0; font-weight: 600; font-size: 14px; overflow-x: visible; }
-  .flow-box { background: var(--card); border: 2px solid var(--blue); border-radius: 8px; padding: 10px 12px; white-space: nowrap; text-align: center; }
-  .flow-arrow { font-size: 18px; color: var(--blue); flex-shrink: 0; }
-  pre { background: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 16px; font-size: 13px; overflow-x: auto; line-height: 1.5; }
-  code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; }
-  pre code { background: none; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  th { background: #f8f9fc; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
-  .tag { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; margin: 2px; }
-  .t-blue { background: #e8f0fe; color: var(--blue); } .t-green { background: #e6f7f5; color: var(--green); }
-  .t-amber { background: #fef7ed; color: var(--amber); } .t-red { background: #fef2f2; color: var(--red); }
-  .timeline { position: relative; padding-left: 28px; border-left: 3px solid var(--blue); margin: 16px 0; }
-  .timeline-item { position: relative; margin-bottom: 28px; }
-  .timeline-item::before { content: ""; position: absolute; left: -35px; top: 4px; width: 14px; height: 14px; background: var(--blue); border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px var(--blue); }
-  .timeline-item .phase { font-weight: 700; color: var(--blue); font-size: 14px; margin-bottom: 4px; }
-  .vs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
-  .vs-bad { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; }
-  .vs-good { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; }
-  .vs-bad::before { content: "❌ 沒有 DataFlow 時"; font-weight: 700; font-size: 14px; display: block; margin-bottom: 8px; }
-  .vs-good::before { content: "✅ 有了 DataFlow 後"; font-weight: 700; font-size: 14px; display: block; margin-bottom: 8px; }
-  .ascii-box { background: #f8f9fc; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; line-height: 1.4; white-space: pre; overflow-x: auto; }
-  ol.steps { counter-reset: step; list-style: none; padding: 0; }
-  ol.steps li { counter-increment: step; padding: 10px 0 16px 40px; position: relative; }
-  ol.steps li::before { content: counter(step); position: absolute; left: 0; top: 8px; width: 26px; height: 26px; background: var(--blue); color: #fff; border-radius: 50%; text-align: center; line-height: 26px; font-size: 13px; font-weight: 700; }
-  .note { font-size: 13px; color: var(--muted); font-style: italic; }
-  details { margin-top: 12px }
-  details summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 4px 0; user-select: none }
-  .mermaid { background: #fff; border-radius: 8px; padding: 16px; overflow-x: auto }
+  :root{--blue:#2563eb;--green:#0d9488;--amber:#d97706;--red:#dc2626;--purple:#7c3aed;--bg:#fafbfc;--card:#fff;--border:#e2e5ea;--text:#1a1a2e;--muted:#687083;}
+  body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.75;margin:0;}
+  .hero{background:#0f172a;color:#fff;padding:56px 24px 48px;text-align:center;}
+  .hero h1{font-size:36px;font-weight:800;margin:0;}
+  .hero p{font-size:17px;color:#94a3b8;margin:8px 0 0;}
+  .container{max-width:860px;margin:0 auto;padding:32px 20px 80px;}
+  h2{font-size:22px;margin:52px 0 14px;padding-bottom:10px;border-bottom:2px solid var(--border);}
+  h3{font-size:17px;margin:28px 0 8px;color:#1e293b;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin-bottom:14px;}
+  .card-blue{border-left:4px solid var(--blue);}
+  .card-green{border-left:4px solid var(--green);}
+  .card-amber{border-left:4px solid var(--amber);}
+  .card-purple{border-left:4px solid var(--purple);}
+  code{background:#f1f5f9;border-radius:4px;padding:2px 7px;font-size:13px;font-family:ui-monospace,monospace;}
+  pre{background:#1e293b;color:#e2e8f0;border-radius:10px;padding:20px;overflow-x:auto;font-size:13px;line-height:1.6;}
+  pre .c{color:#64748b;}
+  pre .k{color:#93c5fd;}
+  pre .s{color:#86efac;}
+  pre .fn{color:#fde68a;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;}
+  th{text-align:left;background:#f8fafc;padding:10px 14px;font-size:13px;border-bottom:2px solid var(--border);}
+  td{padding:10px 14px;font-size:14px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;}
+  .badge-blue{background:#dbeafe;color:#1d4ed8;}
+  .badge-green{background:#d1fae5;color:#065f46;}
+  .badge-amber{background:#fef3c7;color:#92400e;}
+  .flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;padding:20px 0;font-weight:600;font-size:13px;}
+  .flow-box{background:#fff;border:2px solid var(--blue);border-radius:8px;padding:10px 14px;text-align:center;}
+  .flow-arrow{font-size:18px;color:var(--blue);}
+  .muted{color:var(--muted);font-size:13px;}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', async function() {
-    mermaid.initialize({startOnLoad: false, theme: 'default'});
-    var blocks = document.querySelectorAll('.mermaid');
-    for (var i = 0; i < blocks.length; i++) {
-        try {
-            var code = blocks[i].textContent.trim();
-            var result = await mermaid.render('mmd-' + i, code);
-            blocks[i].innerHTML = result.svg;
-        } catch(e) {
-            blocks[i].innerHTML = '<p style="color:#dc2626;padding:16px">Mermaid error: ' + e.message + '. <a href="https://mermaid.live" target="_blank">Open mermaid.live</a> to debug.</p>';
-        }
-    }
-});
-</script>
 </head>
 <body>
 
 <div class="hero">
   <h1>DataFlow Manager</h1>
-  <p>把你的 CSV 檔案自動變成資料庫 + 網頁介面</p>
+  <p>Django 資料庫管理工具 — 架構與技術文件（Python 視角）</p>
 </div>
 
 <div class="container">
 
-<!-- ====== 1. WHAT & WHY ====== -->
-<h2>1. DataFlow 在做什麼？</h2>
+<!-- ── 1. 項目概覽 ── -->
+<h2>1. 項目概覽</h2>
 <div class="card card-blue">
-  <p style="font-size:16px;margin:0">一句話：<strong>你丟一個 CSV 檔案進去，它自動幫你建立資料庫表格 + 網頁後台，可以搜尋、排序、匯出。</strong></p>
+  <p>DataFlow Manager 是一個以 <strong>Django 5.2</strong> 為基礎的資料庫管理工具，直接操作 PostgreSQL 資料表，無需額外抽象層。提供兩種介面：</p>
+  <ul>
+    <li><strong>Web UI</strong> — DB Explorer（瀏覽表格、匯入 CSV、匯出、刪除）</li>
+    <li><strong>CLI Wizard</strong> — 互動式終端向導（<code>python manage.py dataflow</code>）</li>
+  </ul>
+  <p>核心設計原則：<strong>pandas 讀取 → 直接 SQL 插入</strong>，不經過任何中間快取層。</p>
 </div>
 
-<h3 style="margin-top:24px">它解決了什麼問題？</h3>
-<div class="vs">
-  <div class="vs-bad">
-    <ul style="margin:0;padding-left:18px;font-size:14px">
-      <li>拿到 CSV → Excel 打開 → 手動檢查格式</li>
-      <li>欄位型別要自己猜</li>
-      <li>想放進資料庫 → 手動寫 CREATE TABLE</li>
-      <li>想給同事看 → 匯出 Excel 寄 email</li>
-      <li>更新資料 → 重複以上全部步驟</li>
-    </ul>
-  </div>
-  <div class="vs-good">
-    <ul style="margin:0;padding-left:18px;font-size:14px">
-      <li><code>dataflow run data.csv</code> → 一行指令</li>
-      <li>自動推斷 13 種型別</li>
-      <li>自動 CREATE TABLE + 寫入資料</li>
-      <li>即時網頁介面，搜尋排序匯出</li>
-      <li>換規則 → <code>dataflow clean</code> 重新清洗</li>
-    </ul>
-  </div>
-</div>
-
-<div class="icon-row">
-  <div class="icon-item"><div class="emoji">📄</div><div class="label">上傳 CSV / Excel</div></div>
-  <div class="icon-item"><div class="emoji">🔍</div><div class="label">自動判斷欄位型別</div></div>
-  <div class="icon-item"><div class="emoji">🧹</div><div class="label">自動清洗資料</div></div>
-  <div class="icon-item"><div class="emoji">🗄️</div><div class="label">自動建立 SQL 表格</div></div>
-  <div class="icon-item"><div class="emoji">🌐</div><div class="label">網頁介面查看</div></div>
-</div>
-
-<div class="tip">你不用手動 CREATE TABLE，不用寫 SQL，不用寫 HTML。全部自動完成。</div>
-
-<!-- ====== 2. HOW IT WORKS ====== -->
-<h2>2. 它是怎麼運作的？</h2>
+<!-- ── 2. 架構圖 ── -->
+<h2>2. 系統架構</h2>
 <div class="flow">
-  <div class="flow-box">1. 讀取檔案</div><span class="flow-arrow">→</span>
-  <div class="flow-box">2. 猜欄位型別</div><span class="flow-arrow">→</span>
-  <div class="flow-box">3. 清洗資料</div><span class="flow-arrow">→</span>
-  <div class="flow-box">4. 存入資料庫</div><span class="flow-arrow">→</span>
-  <div class="flow-box">5. 網頁查看</div>
+  <div class="flow-box">使用者<br><span class="muted">Browser / Terminal</span></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">Django Views<br><span class="muted">views.py</span></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">DB Introspection<br><span class="muted">db_explorer.py</span></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">PostgreSQL<br><span class="muted">Raw SQL</span></div>
+</div>
+<div class="flow">
+  <div class="flow-box">Terminal<br><span class="muted">manage.py dataflow</span></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">CLI Wizard<br><span class="muted">cli.py</span></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">pandas + SQL<br><span class="muted">_import_file_to_table</span></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">PostgreSQL<br><span class="muted">Raw SQL</span></div>
 </div>
 
-<div class="card card-blue" style="margin-top:20px">
-  <h3 style="margin-top:0">步驟 1：讀取檔案 — 一行指令，五種格式</h3>
-  <p>傳統做法：拿到 CSV → 用 Excel/Python 打開 → 檢查編碼 → 處理缺失值 → 確認欄位名稱 → 才能開始處理。換一種格式又要重寫讀取程式碼。</p>
-  <p><strong>DataFlow 的做法：</strong>無論什麼格式，都是一行指令。背後使用 <strong>Pandas</strong> 統一處理 CSV、Excel、JSON、Parquet、Feather 五種格式，自動處理編碼、NaN、欄位名稱。</p>
-  <pre><code>python manage.py dataflow run data.csv --name "我的資料"
-# 也支援: .xlsx  .json  .parquet  .feather</code></pre>
-  <p class="note">把「讀檔案」從 30 分鐘的資料工程變成 1 秒鐘的指令。</p>
+<!-- ── 3. 檔案結構 ── -->
+<h2>3. 核心檔案結構</h2>
+<pre>
+dataflow/
+├── views.py                <span class="c"># Web UI 的所有 Django views</span>
+├── db_explorer.py          <span class="c"># 資料表結構查詢工具函數</span>
+├── cli.py                  <span class="c"># CLI Wizard + _import_file_to_table</span>
+├── management/
+│   └── commands/
+│       └── dataflow.py     <span class="c"># manage.py dataflow 入口（啟動 wizard）</span>
+├── models.py               <span class="c"># 僅保留遷移所需的 Dataset 模型殼</span>
+├── urls.py                 <span class="c"># 路由：/dataflow/* → views</span>
+└── templates/
+    └── dataflow/
+        ├── base.html       <span class="c"># 側邊欄 + 頂部導航</span>
+        ├── db_explorer.html        <span class="c"># 表格列表頁</span>
+        ├── db_explorer_table.html  <span class="c"># 單一表格資料頁</span>
+        └── upload.html             <span class="c"># 匯入上傳頁</span>
+</pre>
+
+<!-- ── 4. Web UI ── -->
+<h2>4. Web UI — 核心 Python 邏輯</h2>
+
+<h3>4.1 資料表探索 <code>db_explorer()</code></h3>
+<div class="card card-green">
+  <p>呼叫 <code>db_explorer.get_all_tables()</code>，底層使用 Django 的 <code>connection.introspection</code> API：</p>
+<pre>
+<span class="k">from</span> django.db <span class="k">import</span> connection
+
+tables = connection.introspection.table_names()         <span class="c"># 所有表格名稱</span>
+cols   = connection.introspection.get_table_description(cursor, table_name)  <span class="c"># 欄位描述</span>
+</pre>
+  <p>每個表格附有：名稱、行數、欄數、分類（<code>django-app</code> / <code>system</code> / <code>dataflow</code>）。</p>
 </div>
 
+<h3>4.2 CSV / JSON 匯入 <code>_import_uploaded_csv_to_table()</code></h3>
 <div class="card card-blue">
-  <h3 style="margin-top:0">步驟 2：猜欄位型別 — 不再需要逐個 Model 去定義</h3>
-  <p>傳統做法：手動建立 Django Model，每個欄位都要自己判斷型別、自己寫程式碼。20 個欄位 = 20 行程式碼。</p>
-  <p><strong>DataFlow 的做法：</strong>取樣前 200 行，按 <code>boolean → email → url → date → int → float → string</code> 優先級自動推斷。</p>
-  <pre><code>原始值                  推斷型別
-alice@mail.com      →  email      (regex 驗證)
-https://example.com →  url        (URL 格式檢測)
-2023/09/02          →  date       (多格式日期解析)
-85.5                →  float      (數值檢測)
-true                →  boolean    (布林值關鍵字)</code></pre>
-  <p class="note">20 欄位的 Model 定義，從手寫 20 行變成 0 行。</p>
+  <p>上傳的檔案流程：</p>
+<pre>
+<span class="c"># 1. 讀取（pandas）</span>
+df = pd.read_csv(tmp_path)           <span class="c"># 或 read_excel / read_json</span>
+
+<span class="c"># 2. 匹配欄位（只插入 CSV 與 DB 表格共同有的欄位）</span>
+insert_cols = [c <span class="k">for</span> c <span class="k">in</span> df.columns <span class="k">if</span> c <span class="k">in</span> db_columns]
+
+<span class="c"># 3. 批量插入</span>
+sql = <span class="s">f"INSERT INTO {table} ({cols}) VALUES ({placeholders})"</span>
+cursor.executemany(sql, values)
+
+<span class="c"># 4. 重置 PostgreSQL serial sequence</span>
+_reset_table_sequence(table_name, pk_column)
+</pre>
+  <p>若目標表格不存在，<code>_create_table_from_csv()</code> 會先用 <code>_sql_type_for_series()</code> 推斷每欄的 SQL 類型（<code>BIGINT</code> / <code>TIMESTAMPTZ</code> / <code>TEXT</code>…）再建立表格。</p>
 </div>
 
+<h3>4.3 SQL 類型自動推斷 <code>_sql_type_for_series()</code></h3>
+<div class="card card-amber">
+<pre>
+<span class="k">def</span> <span class="fn">_sql_type_for_series</span>(series):
+    <span class="k">if</span> pd.api.types.is_integer_dtype(series):    <span class="k">return</span> <span class="s">'BIGINT'</span>
+    <span class="k">if</span> pd.api.types.is_float_dtype(series):      <span class="k">return</span> <span class="s">'DOUBLE PRECISION'</span>
+    <span class="k">if</span> pd.api.types.is_datetime64_any_dtype(series): <span class="k">return</span> <span class="s">'TIMESTAMPTZ'</span>
+    <span class="c"># 偵測 ISO 日期字串（如 2026-06-04T16:00:00+00:00）</span>
+    <span class="k">if</span> series.dtype == object <span class="k">and</span> sample.str.match(<span class="s">r'^\d{4}-\d{2}-\d{2}[T ]'</span>).all():
+        <span class="k">return</span> <span class="s">'TIMESTAMPTZ'</span>
+    <span class="k">return</span> <span class="s">'TEXT'</span>
+</pre>
+  <p>這避免了 datetime 欄位被錯誤地建立為 <code>TEXT</code>，防止後續 <code>timestamp &gt;= text</code> 類型錯誤。</p>
+</div>
+
+<h3>4.4 匯出 <code>db_explorer_export()</code></h3>
+<div class="card card-green">
+<pre>
+<span class="c"># 直接查詢 → pandas DataFrame → 輸出</span>
+cursor.execute(<span class="s">f"SELECT {cols} FROM {table}"</span>)
+df = pd.DataFrame(data)
+
+df.to_csv(...)    <span class="c"># CSV</span>
+df.to_excel(...)  <span class="c"># Excel（需先 _prepare_dataframe_for_excel() 去除 timezone）</span>
+df.to_json(...)   <span class="c"># JSON（force_ascii=False, date_format='iso'）</span>
+</pre>
+  <p>批量匯出（多表格選擇）會把每個表格打包進一個 ZIP 檔案回傳給瀏覽器。</p>
+</div>
+
+<!-- ── 5. CLI Wizard ── -->
+<h2>5. CLI Wizard — 互動式向導</h2>
+
+<h3>5.1 啟動方式</h3>
+<pre>
+python manage.py dataflow   <span class="c"># 啟動互動向導（無需任何參數）</span>
+</pre>
+<p>管理命令 <code>management/commands/dataflow.py</code> 只有一行邏輯：呼叫 <code>cli.run_wizard()</code>。向導結束後可選擇返回主目錄或退出，以遞迴呼叫實現。</p>
+
+<h3>5.2 終端輔助函數</h3>
+<div class="card card-purple">
+<p>向導的所有終端輸出由四個簡單函數驅動，使用 ANSI escape code 顯示顏色：</p>
+<pre>
+<span class="fn">_step</span>(n, label)          <span class="c"># 藍色步驟標題：  Step 2  What to do?</span>
+<span class="fn">_ok</span>(msg)                 <span class="c"># 綠色成功：  ✔  17 rows imported</span>
+<span class="fn">_err</span>(msg)                <span class="c"># 紅色錯誤：  ✘  File not found</span>
+<span class="fn">_ask</span>(prompt, default)    <span class="c"># 文字輸入：  › Name [course]: _</span>
+<span class="fn">_choose</span>(prompt, options) <span class="c"># 數字菜單，返回選中的 value（非 label）</span>
+</pre>
+<p><code>_choose()</code> 接收 <code>[(label, value), ...]</code>，用戶輸入數字，返回對應 value（可以是任意 Python 物件，如 <code>True</code>/<code>False</code> 或字串 sentinel）。</p>
+</div>
+
+<h3>5.3 Step 1 — 顯示資料表</h3>
+<div class="card card-green">
+<p>向導啟動後立即查詢所有資料表，按前綴分為兩組：</p>
+<pre>
+_SYS = {<span class="s">'django_'</span>, <span class="s">'auth_'</span>, <span class="s">'dataflow_'</span>, <span class="s">'taggit_'</span>}
+
+app_tables = sorted(t <span class="k">for</span> t <span class="k">in</span> all_table_names
+                    <span class="k">if not</span> any(t.startswith(p) <span class="k">for</span> p <span class="k">in</span> _SYS))
+sys_tables = sorted(t <span class="k">for</span> t <span class="k">in</span> all_table_names
+                    <span class="k">if</span> any(t.startswith(p) <span class="k">for</span> p <span class="k">in</span> _SYS))
+</pre>
+<p>每個表格即時執行 <code>SELECT COUNT(*)</code> 顯示行數。後續所有操作（查看 / 匯出 / 匯入 / 清除）只向用戶展示 <code>app_tables</code>。</p>
+</div>
+
+<h3>5.4 Step 2 — 動作菜單</h3>
+<table>
+  <tr><th>選項</th><th>動作代碼</th><th>說明</th></tr>
+  <tr><td>View table data</td><td><code>'view'</code></td><td>逐筆顯示記錄，超過10筆自動分頁</td></tr>
+  <tr><td>Export data to file</td><td><code>'export'</code></td><td>選擇單一表格或全部，輸出 CSV/Excel/JSON</td></tr>
+  <tr><td>Import file into table</td><td><code>'run'</code></td><td>支援單一檔案或整個資料夾</td></tr>
+  <tr><td>Clear table data</td><td><code>'delete'</code></td><td>DELETE 表格所有行（保留結構），支援全部清除</td></tr>
+  <tr><td>Quit</td><td><code>'quit'</code></td><td>立即退出</td></tr>
+</table>
+
+<h3>5.5 查看資料（View）</h3>
+<div class="card card-amber">
+<p>每筆記錄以垂直 <code>key: value</code> 格式顯示，超過80字元的值自動截斷。分頁邏輯：</p>
+<pre>
+PAGE = 10
+<span class="k">if</span> total &lt;= PAGE:
+    _print_records(all_rows, 0)         <span class="c"># 直接全部顯示</span>
+<span class="k">else</span>:
+    <span class="k">while</span> True:
+        page_rows = all_rows[start:start + PAGE]
+        _print_records(page_rows, start)
+        choice = _choose(<span class="s">'Navigation:'</span>, nav)  <span class="c"># Next / Previous / Back</span>
+        <span class="k">if</span> choice == <span class="s">'back'</span>: <span class="k">break</span>
+        page += <span class="s">1</span> <span class="k">if</span> choice == <span class="s">'next'</span> <span class="k">else</span> <span class="s">-1</span>
+</pre>
+</div>
+
+<h3>5.6 匯出（Export）</h3>
 <div class="card card-blue">
-  <h3 style="margin-top:0">步驟 3：清洗資料 — 靠 Rule 全自動化</h3>
-  <p>傳統做法：寫一堆 if/else 檢查每個值 — 是不是 email？有沒有多餘空白？日期格式對不對？數字有沒超出範圍？</p>
-  <p><strong>DataFlow 的做法：</strong>推斷出的型別自動轉成 Rule。清洗引擎 <code>GenericDataCleaner</code> 根據 Rule 逐行執行 13 種內建清洗函式：</p>
-  <pre><code>清洗前                清洗後              使用的 Rule
-"  S001  "       →   "S001"             string (trim 空白)
-" YES "          →   true               boolean (轉布林)
-"invalid-email"  →   ⚠️ 標記為錯誤      email (regex 驗證)
-"2023/09/02"     →   "2023-09-02"       date (標準化日期格式)
-"105" (上限100)  →   100.0              float (clamp 到 max)</code></pre>
-  <p class="note">全自動流水線。你只需要提供 Rule（或讓它自己推斷），不需要寫任何檢查邏輯。</p>
+<p>查詢資料 → 建立 pandas DataFrame → 寫出檔案：</p>
+<pre>
+<span class="k">with</span> _conn.cursor() <span class="k">as</span> cur:
+    cur.execute(<span class="s">f"SELECT * FROM {table}"</span>)
+    cols = [d[0] <span class="k">for</span> d <span class="k">in</span> cur.description]
+    rows = cur.fetchall()
+
+df = pd.DataFrame(rows, columns=cols)
+
+df.to_csv(path, index=False)
+df.to_excel(path, index=False)
+df.to_json(path, orient=<span class="s">'records'</span>, indent=2,
+           force_ascii=False,    <span class="c"># 保留中文字符</span>
+           date_format=<span class="s">'iso'</span>)   <span class="c"># 日期輸出 ISO 格式而非毫秒時間戳</span>
+</pre>
+<p>選擇「All application tables」時，依次對每個 <code>app_tables</code> 中的表格執行上述流程，各自輸出獨立檔案。</p>
 </div>
 
+<h3>5.7 匯入（Import）</h3>
+<div class="card card-green">
+<p>支援兩種模式：</p>
+<table>
+  <tr><th>模式</th><th>判斷條件</th><th>行為</th></tr>
+  <tr><td>單一檔案</td><td><code>os.path.isfile(path)</code></td><td>用戶選擇目標表格，可指定 replace 或 append</td></tr>
+  <tr><td>整個資料夾</td><td><code>os.path.isdir(path)</code></td><td>掃描所有 <code>.csv/.xlsx/.json</code>，以<strong>檔名作為表格名稱</strong>批量匯入</td></tr>
+</table>
+<p>核心匯入邏輯在 <code>_import_file_to_table(conn, file_path, table_name, replace)</code>：</p>
+<pre>
+<span class="c"># 1. 讀取檔案</span>
+df = pd.read_csv(file_path)  <span class="c"># / read_excel / read_json</span>
+df = df.replace({pd.NA: None, float(<span class="s">'nan'</span>): None})  <span class="c"># 統一 null 值</span>
+
+<span class="c"># 2. 若表格不存在 → 推斷類型並建立</span>
+col_defs = [<span class="s">f'{quote(col)} {_sql_type_for_series(df[col])}'</span>
+            <span class="k">for</span> col <span class="k">in</span> df.columns]
+cursor.execute(<span class="s">f"CREATE TABLE {table} ({', '.join(col_defs)})"</span>)
+
+<span class="c"># 3. 只插入 DB 中已存在的欄位（自動跳過多餘欄位）</span>
+db_cols = {c.name <span class="k">for</span> c <span class="k">in</span> conn.introspection.get_table_description(...)}
+insert_cols = [c <span class="k">for</span> c <span class="k">in</span> df.columns <span class="k">if</span> c <span class="k">in</span> db_cols]
+
+<span class="c"># 4. 批量插入（帶事務）</span>
+<span class="k">with</span> transaction.atomic():
+    <span class="k">if</span> replace:
+        cursor.execute(<span class="s">f"DELETE FROM {table}"</span>)
+    cursor.executemany(sql, values)
+</pre>
+</div>
+
+<h3>5.8 清除資料（Clear）</h3>
+<div class="card card-amber">
+<p>選擇「All application tables」時，輸入 <code>"ALL"</code> 確認；選擇單一表格時輸入表格名稱確認，防止誤操作。</p>
+<pre>
+<span class="k">with</span> _conn.cursor() <span class="k">as</span> cur:
+    <span class="k">for</span> name <span class="k">in</span> names:   <span class="c"># names = [table] 或 app_tables</span>
+        cur.execute(<span class="s">f"DELETE FROM {quote(name)}"</span>)
+        _ok(<span class="s">f'All rows deleted from "{name}".'</span>)
+</pre>
+<p>使用 <code>DELETE</code> 而非 <code>TRUNCATE</code>，以確保外鍵約束不被違反（Django 的級聯刪除順序）。</p>
+</div>
+
+<!-- ── 6. 資料庫連接原理 ── -->
+<h2>6. 如何讀取 SQL 資料 — 連接原理</h2>
+
+<h3>6.1 連接從哪裡來？</h3>
 <div class="card card-blue">
-  <h3 style="margin-top:0">步驟 4：存入資料庫 — 完美還原，而不是單純寫入</h3>
-  <p>傳統做法：CSV 匯入 SQLite → 所有欄位變 TEXT。數字變字串、日期變字串。<strong>型別資訊永遠遺失。</strong></p>
-  <p><strong>DataFlow 的做法：</strong>雙重儲存（Dual-Write）：</p>
-  <pre><code>┌─ JSON 備份 (DataRecord) — 保留原始彈性，方便回溯
-└─ 真實 SQL 表格 (dataflow_dataset_N) — 每個欄位正確型別：
-   int → IntegerField (可 SUM/AVG)    date → DateField (可日期篩選)
-   float → FloatField (可計算)        url → URLField (可 URL 查詢)
-   boolean → BooleanField (可過濾)    email → CharField(255) (可搜尋)</code></pre>
-  <div class="tip">Rule 寫錯了？用 <code>dataflow clean</code> 重新清洗 — 從 JSON 備份取出原始資料，套用新 Rule，重建 SQL 表格。</div>
+<p>Django 在 <code>settings.py</code> 定義連接參數，啟動時建立一個<strong>全域 <code>connection</code> 物件</strong>，整個項目共用同一條連接：</p>
+<pre>
+<span class="c"># settings.py（宿主項目配置）</span>
+DATABASES = {
+    <span class="s">'default'</span>: {
+        <span class="s">'ENGINE'</span>: <span class="s">'django.db.backends.postgresql'</span>,
+        <span class="s">'NAME'</span>: <span class="s">'your_db'</span>,
+        <span class="s">'HOST'</span>: <span class="s">'localhost'</span>,
+    }
+}
+
+<span class="c"># 任何 Python 檔案只需一行即可使用</span>
+<span class="k">from</span> django.db <span class="k">import</span> connection
+</pre>
+<p>DataFlow Manager 作為 Django App 安裝到宿主項目後，自動繼承宿主的 <code>DATABASES</code> 設定，因此能直接讀寫宿主項目的所有表格，無需額外配置。</p>
 </div>
 
+<h3>6.2 如何讀取任意表格？</h3>
+<div class="card card-green">
+<p>使用 <strong>DB-API 2.0</strong> 標準 cursor，無需預先定義 Django Model：</p>
+<pre>
+<span class="k">with</span> connection.cursor() <span class="k">as</span> cursor:
+    cursor.execute(<span class="s">"SELECT * FROM course"</span>)
+    rows = cursor.fetchall()                      <span class="c"># → [(4, 'oo_456', 'INAINA', ...), ...]</span>
+    cols = [d[0] <span class="k">for</span> d <span class="k">in</span> cursor.description]    <span class="c"># → ['id', 'code', 'name', ...]</span>
+</pre>
+<p>關鍵：<code>cursor.description</code> 是 DB-API 2.0 標準屬性，每個元素包含欄位名稱、類型代碼等。這讓系統能<strong>動態</strong>處理任何表格，不需要 Model 定義。</p>
+</div>
+
+<h3>6.3 如何發現有哪些表格？</h3>
+<div class="card card-purple">
+<p>Django 的 <strong>DB Introspection API</strong> 直接查詢 PostgreSQL 的 <code>information_schema</code>：</p>
+<pre>
+<span class="c"># 列出所有表格</span>
+connection.introspection.table_names()
+<span class="c"># → ['course', 'news', 'student', 'auth_user', 'django_migrations', ...]</span>
+
+<span class="c"># 取得欄位結構（名稱、PostgreSQL 類型代碼、是否允許 null）</span>
+connection.introspection.get_table_description(cursor, <span class="s">'course'</span>)
+<span class="c"># → [FieldInfo(name='id', type_code=23, null_ok=False), ...]</span>
+
+<span class="c"># type_code 是 PostgreSQL OID，例如：</span>
+<span class="c"># 23=INTEGER, 25=TEXT, 1114=TIMESTAMP, 1184=TIMESTAMPTZ, 701=FLOAT</span>
+</pre>
+<p>這就是 DB Explorer 無需任何 Model 就能列出並分類所有表格的原因。</p>
+</div>
+
+<h3>6.4 各元件如何共用同一連接</h3>
+<div class="card card-amber">
+<p><code>connection</code> 是全域單例，所有元件都 <code>from django.db import connection</code>，指向同一個資料庫：</p>
+<pre>
+connection（全域物件，指向宿主 PostgreSQL）
+    │
+    ├─ db_explorer.py
+    │   <span class="fn">get_all_tables</span>()  ──► introspection.table_names()
+    │   <span class="fn">get_table_schema</span>() ──► introspection.get_table_description()
+    │
+    ├─ views.py（Web UI）
+    │   <span class="fn">db_explorer</span>()      ──► get_all_tables() → 渲染 HTML 表格列表
+    │   <span class="fn">upload</span>()           ──► pandas 讀取 → cursor.executemany() 插入
+    │   <span class="fn">db_explorer_export</span>() ──► cursor.execute() → pandas → 檔案下載
+    │
+    └─ cli.py（CLI Wizard）
+        <span class="fn">run_wizard</span>()       ──► introspection.table_names() → 終端顯示
+        <span class="fn">_import_file_to_table</span>() ──► pandas 讀取 → cursor.executemany()
+</pre>
+<p><strong>Web UI 和 CLI Wizard 操作的是同一個資料庫，區別只在於輸出方式：HTTP Response vs <code>print()</code>。</strong></p>
+</div>
+
+<h3>6.5 Web UI 如何把 SQL 資料傳給 Template？</h3>
 <div class="card card-blue">
-  <h3 style="margin-top:0">步驟 5：網頁查看 — 有 UI，一目了然</h3>
-  <p>傳統做法：資料在資料庫裡，要看必須寫 SQL。DataFlow 自動生成完整網頁操作介面：</p>
-  <table>
-    <tr><th>功能</th><th>傳統方式</th><th>DataFlow</th></tr>
-    <tr><td>查看資料</td><td>寫 SQL 查詢</td><td>✅ 點擊資料集 → 即時顯示</td></tr>
-    <tr><td>搜尋</td><td>WHERE column LIKE '%x%'</td><td>✅ 搜尋框直接輸入</td></tr>
-    <tr><td>排序</td><td>ORDER BY column</td><td>✅ 點擊欄位標題</td></tr>
-    <tr><td>匯出</td><td>寫匯出程式</td><td>✅ 下拉選單 → CSV/JSON/Excel</td></tr>
-    <tr><td>刪除</td><td>DROP TABLE + DELETE</td><td>✅ 一鍵刪除（含 SQL 表格）</td></tr>
-    <tr><td>重新清洗</td><td>全部重做</td><td>✅ 上傳新 Rule → 自動重建</td></tr>
-    <tr><td>型別標籤</td><td>看程式碼才知</td><td>✅ Schema 彩色標籤</td></tr>
-  </table>
-  <p class="note">從「寫 SQL」變成「點滑鼠」。非技術人員也能獨立操作。</p>
+<pre>
+<span class="c"># views.py</span>
+<span class="k">def</span> <span class="fn">db_explorer_table</span>(request, table_name):
+    <span class="k">with</span> connection.cursor() <span class="k">as</span> cursor:
+        cursor.execute(<span class="s">f"SELECT * FROM {table_name}"</span>)
+        cols = [d[0] <span class="k">for</span> d <span class="k">in</span> cursor.description]
+        rows = cursor.fetchall()
+
+    row_data = [{cols[i]: row[i] <span class="k">for</span> i <span class="k">in</span> range(len(cols))} <span class="k">for</span> row <span class="k">in</span> rows]
+
+    <span class="k">return</span> render(request, <span class="s">'db_explorer_table.html'</span>, {
+        <span class="s">'row_data'</span>: row_data,   <span class="c"># Python list of dicts → Template 直接遍歷</span>
+        <span class="s">'col_names'</span>: cols,
+    })
+</pre>
+<pre>
+<span class="c">&lt;!-- db_explorer_table.html --&gt;</span>
+{% for row in row_data %}
+  {% for col in col_names %}
+    &lt;td&gt;{{ row|get:col }}&lt;/td&gt;
+  {% endfor %}
+{% endfor %}
+</pre>
 </div>
 
-<!-- ====== 3. DEV TIMELINE ====== -->
-<h2>3. 開發歷程：從 CLI 工具到可復用套件</h2>
-<p class="note">了解這個專案是如何一步步演進的，能幫你理解每個檔案的價值。</p>
+<!-- ── 7. 技術堆疊 ── -->
+<h2>6. 技術堆疊</h2>
+<table>
+  <tr><th>技術</th><th>用途</th><th>版本</th></tr>
+  <tr><td><strong>Django</strong></td><td>Web 框架、ORM、管理命令、模板引擎</td><td>5.2</td></tr>
+  <tr><td><strong>pandas</strong></td><td>讀取 CSV/Excel/JSON、類型推斷、DataFrame 轉換</td><td>最新穩定版</td></tr>
+  <tr><td><strong>PostgreSQL</strong></td><td>主資料庫，透過 <code>django.db.connection</code> 直接執行 SQL</td><td>—</td></tr>
+  <tr><td><strong>openpyxl</strong></td><td>Excel 檔案讀寫（pandas ExcelWriter 後端）</td><td>—</td></tr>
+  <tr><td><strong>Bootstrap 5</strong></td><td>Web UI 前端樣式框架</td><td>5.x</td></tr>
+  <tr><td><strong>HTMX</strong></td><td>局部頁面更新（刪除確認等）</td><td>2.0</td></tr>
+</table>
 
-<div class="timeline">
-
-<div class="timeline-item">
-  <div class="phase">🔹 第一階段：獨立 CLI 工具</div>
-  <div class="card card-blue" style="margin-top:8px">
-    <p><strong>目標：</strong>能在終端機下指令讀 CSV、清洗、存進資料庫。</p>
-    <table>
-      <tr><th>檔案</th><th>角色</th></tr>
-      <tr><td><code>auto_rules.py</code></td><td>自動推斷 CSV 欄位型別</td></tr>
-      <tr><td><code>data_processor.py</code></td><td>清洗引擎 — 讀檔 + 驗證 + 標準化</td></tr>
-      <tr><td><code>models.py</code></td><td>定義 Dataset、DataRecord、CleaningLog</td></tr>
-      <tr><td><code>cli.py</code></td><td>核心命令邏輯</td></tr>
-    </table>
-    <p><strong>此時的限制：</strong>只能在本機終端機操作，無法分享給其他人用。</p>
-  </div>
-</div>
-
-<div class="timeline-item">
-  <div class="phase">🔹 第二階段：加入 Web UI</div>
-  <div class="card card-blue" style="margin-top:8px">
-    <p><strong>目標：</strong>讓使用者透過瀏覽器上傳、查看、管理資料。</p>
-    <table>
-      <tr><th>檔案</th><th>角色</th></tr>
-      <tr><td><code>views.py + urls.py</code></td><td>網頁請求和 URL 路由</td></tr>
-      <tr><td><code>admin.py</code></td><td>動態表格自動出現在 Django Admin</td></tr>
-      <tr><td><code>middleware.py</code></td><td>Admin 即時刷新（新資料不用重啟伺服器）</td></tr>
-      <tr><td><code>schema_manager.py</code></td><td>核心魔法 — 動態建立 SQL 表格和 Django Model</td></tr>
-      <tr><td><code>templates/ + static/</code></td><td>HTML 模板 + CSS/JS</td></tr>
-    </table>
-    <p><strong>此時的限制：</strong>只能在此專案使用。想在其他 Django 專案用 → 必須手動複製貼上所有檔案。</p>
-  </div>
-</div>
-
-<div class="timeline-item">
-  <div class="phase">🔹 第三階段：打包為 pip 可安裝套件</div>
-  <div class="card card-green" style="margin-top:8px">
-    <p><strong>目標：</strong>任何 Django 專案都可以 <code>pip install</code> 後立即使用。</p>
-    <table>
-      <tr><th>改動</th><th>為什麼重要</th></tr>
-      <tr><td><code>core/</code> → <code>dataflow/</code></td><td>通用 App 名稱，不與宿主專案撞名</td></tr>
-      <tr><td>新增 management command</td><td>CLI 變成 <code>python manage.py dataflow</code></td></tr>
-      <tr><td>移除模組層級 django.setup()</td><td>不再強制設定，由宿主專案管理</td></tr>
-      <tr><td>新增 pyproject.toml</td><td>定義套件名稱、依賴，讓 pip 可安裝</td></tr>
-      <tr><td>模板改用 {% url %}</td><td>支援掛在任意子路徑</td></tr>
-      <tr><td>新增 db_explorer.py</td><td>瀏覽宿主專案中的所有表格</td></tr>
-    </table>
-  </div>
-</div>
-
-</div>
-
-<!-- ====== 4. FILES ====== -->
-<h2>4. 專案裡面有什麼？（從易到難）</h2>
-<div class="card">
-  <table>
-    <tr><th>檔案</th><th>做什麼？</th><th>為什麼需要它？</th><th>沒有它會怎樣？</th><th>難度</th></tr>
-    <tr><td><code>auto_rules.py</code></td><td>讀取 CSV 取樣，自動判斷每欄型別</td><td>使用者不用手寫規則檔</td><td>每次匯入都要手動指定每個欄位型別</td><td><span class="tag t-green">★</span></td></tr>
-    <tr><td><code>cli.py</code></td><td>Pipeline 類別 + fluent API</td><td>把流程包裝成可串聯的步驟</td><td>每步要分開執行，無法自動化</td><td><span class="tag t-green">★</span></td></tr>
-    <tr><td><code>models.py</code></td><td>4 個核心資料表定義</td><td>所有資料的儲存結構基礎</td><td>資料無法被儲存</td><td><span class="tag t-green">★</span></td></tr>
-    <tr><td><code>templates/ + static/</code></td><td>HTML 模板 + CSS/JS 資源</td><td>提供視覺化介面</td><td>只能用 CLI 操作，無瀏覽器介面</td><td><span class="tag t-green">★</span></td></tr>
-    <tr><td><code>views.py + urls.py</code></td><td>8 個 View + URL 路由</td><td>橋接 HTTP 請求和 Python 邏輯</td><td>網頁全部 404</td><td><span class="tag t-amber">★★</span></td></tr>
-    <tr><td><code>data_processor.py</code></td><td>清洗引擎 — 13 種清洗函式</td><td>自動驗證和標準化資料</td><td>髒資料直接進資料庫</td><td><span class="tag t-amber">★★</span></td></tr>
-    <tr><td><code>admin.py</code></td><td>動態註冊 ModelAdmin</td><td>自動出現在 Django Admin</td><td>Admin 看不到動態表格</td><td><span class="tag t-amber">★★</span></td></tr>
-    <tr><td><code>middleware.py</code></td><td>每次 Admin 請求刷新註冊</td><td>新匯入資料即時出現</td><td>每次匯入後必須重啟伺服器</td><td><span class="tag t-amber">★★</span></td></tr>
-    <tr><td><code>db_explorer.py</code></td><td>資料庫瀏覽器</td><td>查看宿主專案的所有表格</td><td>只能看 dataflow 自己的表</td><td><span class="tag t-amber">★★</span></td></tr>
-    <tr><td><code>schema_manager.py</code></td><td>動態 Model 工廠 — type() + SchemaEditor</td><td>最核心的技術。讓「不知道 CSV 有哪些欄位」變成可能</td><td><strong>整個工具失去意義</strong></td><td><span class="tag t-red">★★★</span></td></tr>
-  </table>
-</div>
-
-<!-- ====== 5. KEY TECH ====== -->
-<h2>5. 核心技術深入講解</h2>
-
-<h3>5.0 UML 設計圖</h3>
+<!-- ── 7. 關鍵 Django API ── -->
+<h2>7. 關鍵 Django API 用法</h2>
 
 <div class="card card-purple">
-  <h4 style="margin-top:0">UML 類別圖 — 核心 Model 關聯</h4>
-  <p class="note">Dataset 是整個系統的中心，其他三個 Model 都圍繞著它。</p>
-  <div class="mermaid" id="mermaid-class">classDiagram
-    class Dataset {
-        +String name
-        +String description
-        +JSON raw_data
-        +DateTime updated_at
-    }
-    class DatasetSchema {
-        +String table_name
-        +JSON fields_json
-        +Int version
-    }
-    class DataRecord {
-        +JSON data
-        +DateTime created_at
-    }
-    class CleaningLog {
-        +String status
-        +JSON result
-        +DateTime created_at
-    }
-    Dataset o-- DatasetSchema
-    Dataset o-- DataRecord
-    Dataset o-- CleaningLog</div>
-  <details><summary>Mermaid 原始碼</summary><pre><code>classDiagram
-    class Dataset { +String name +String description +JSON raw_data +DateTime updated_at }
-    class DatasetSchema { +String table_name +JSON fields_json +Int version }
-    class DataRecord { +JSON data +DateTime created_at }
-    class CleaningLog { +String status +JSON result +DateTime created_at }
-    Dataset o-- DatasetSchema
-    Dataset o-- DataRecord
-    Dataset o-- CleaningLog</code></pre></details>
+<h3>7.1 DB Introspection（表格結構查詢）</h3>
+<pre>
+<span class="k">from</span> django.db <span class="k">import</span> connection
+
+<span class="c"># 取得所有表格名稱</span>
+connection.introspection.table_names()
+
+<span class="c"># 取得欄位描述（名稱、類型代碼、null 允許等）</span>
+connection.introspection.get_table_description(cursor, table_name)
+
+<span class="c"># 取得主鍵欄位名</span>
+connection.introspection.get_primary_key_column(cursor, table_name)
+
+<span class="c"># 取得約束（外鍵等）</span>
+connection.introspection.get_constraints(cursor, table_name)
+
+<span class="c"># 安全引用表格/欄位名（防止 SQL 注入）</span>
+connection.ops.quote_name(table_name)
+</pre>
 </div>
 
-<div class="card card-purple">
-  <h4 style="margin-top:0">UML 組件圖 — 系統分層架構</h4>
-  <p class="note">四層架構：Presentation → Business Logic → Data → Storage</p>
-  <div class="mermaid" id="mermaid-component">flowchart TB
-    subgraph P[Presentation Layer]
-        WebUI[Web UI]
-        Admin[Django Admin]
-        CMD[CLI]
-    end
-    subgraph B[Business Logic]
-        Pipeline[Pipeline]
-        Cleaner[GenericDataCleaner]
-    end
-    subgraph D[Data Layer]
-        SM[SchemaManager]
-        ORM[Django ORM]
-    end
-    subgraph S[Storage]
-        SQL[(SQL Database)]
-        JSON[(JSON Backup)]
-    end
-    WebUI --> Pipeline
-    Admin --> Pipeline
-    CMD --> Pipeline
-    Pipeline --> Cleaner
-    Cleaner --> Pipeline
-    Pipeline --> SM
-    Pipeline --> ORM
-    SM --> ORM
-    SM --> SQL
-    ORM --> SQL
-    ORM --> JSON</div>
-  <details><summary>Mermaid 原始碼</summary><pre><code>flowchart TB
-    subgraph P[Presentation] WebUI[Web UI] Admin[Django Admin] CMD[CLI] end
-    subgraph B[Business] Pipeline[Pipeline] Cleaner[GenericDataCleaner] end
-    subgraph D[Data] SM[SchemaManager] ORM[Django ORM] end
-    subgraph S[Storage] SQL[(Database)] JSON[(JSON Backup)] end
-    WebUI --> Pipeline --> Cleaner --> Pipeline
-    Pipeline --> SM --> SQL</code></pre></details>
+<div class="card card-blue">
+<h3>7.2 Raw SQL 執行</h3>
+<pre>
+<span class="k">from</span> django.db <span class="k">import</span> connection, transaction
+
+<span class="c"># 單一查詢</span>
+<span class="k">with</span> connection.cursor() <span class="k">as</span> cursor:
+    cursor.execute(<span class="s">f"SELECT * FROM {table}"</span>)
+    rows = cursor.fetchall()
+    cols = [d[0] <span class="k">for</span> d <span class="k">in</span> cursor.description]
+
+<span class="c"># 批量插入（帶事務）</span>
+<span class="k">with</span> transaction.atomic():
+    <span class="k">with</span> connection.cursor() <span class="k">as</span> cursor:
+        cursor.executemany(sql, values)
+
+<span class="c"># 動態 ALTER TABLE（修復 text → timestamptz）</span>
+cursor.execute(<span class="s">"""
+    ALTER TABLE course
+    ALTER COLUMN registation_expiry_date
+    TYPE timestamptz USING registation_expiry_date::timestamptz
+"""</span>)
+</pre>
 </div>
 
-<div class="card card-purple">
-  <h4 style="margin-top:0">UML 時序圖 — Pipeline 執行流程</h4>
-  <p class="note">以 <code>dataflow run data.csv --name "test"</code> 為例。</p>
-  <div class="mermaid" id="mermaid-sequence">sequenceDiagram
-    participant U as User
-    participant C as CLI
-    participant P as Pipeline
-    participant D as DataProcessor
-    participant S as SchemaManager
-    participant B as Database
-    U->>C: run data.csv
-    C->>P: new Pipeline()
-    C->>P: load_file()
-    P->>D: load_any_file()
-    D-->>P: raw_rows
-    C->>P: auto_rules()
-    P->>D: infer_type()
-    D-->>P: rules dict
-    C->>P: clean()
-    P->>D: clean_dataset()
-    D-->>P: valid_rows
-    C->>P: store()
-    P->>B: create Dataset
-    P->>B: create DataRecords
-    P->>S: create_schema()
-    S->>B: CREATE TABLE
-    S->>S: register_model()
-    P->>B: insert typed rows
-    C->>P: report()
-    P-->>C: summary
-    C-->>U: done</div>
-  <details><summary>Mermaid 原始碼</summary><pre><code>sequenceDiagram
-    User->>CLI: run data.csv
-    CLI->>Pipeline: load_file() → auto_rules() → clean() → store() → report()
-    Pipeline->>DataProcessor: load_any_file / infer_type / clean_dataset
-    DataProcessor-->>Pipeline: raw_rows / rules / valid_rows
-    Pipeline->>SchemaManager: create_schema_for_dataset()
-    SchemaManager->>Database: CREATE TABLE + insert rows</code></pre></details>
-</div>
+<!-- ── 8. URL 結構 ── -->
+<h2>8. URL 路由結構</h2>
+<table>
+  <tr><th>URL</th><th>View 函數</th><th>功能</th></tr>
+  <tr><td><code>/dataflow/</code></td><td>RedirectView → db_explorer</td><td>首頁重定向</td></tr>
+  <tr><td><code>/dataflow/upload/</code></td><td><code>upload()</code></td><td>上傳 CSV/Excel/JSON/SQL</td></tr>
+  <tr><td><code>/dataflow/db-explorer/</code></td><td><code>db_explorer()</code></td><td>所有表格列表</td></tr>
+  <tr><td><code>/dataflow/db-explorer/bulk/</code></td><td><code>db_explorer_bulk_action()</code></td><td>批量操作（匯出/清除/刪除）</td></tr>
+  <tr><td><code>/dataflow/db-explorer/&lt;table&gt;/</code></td><td><code>db_explorer_table()</code></td><td>單一表格資料瀏覽</td></tr>
+  <tr><td><code>/dataflow/db-explorer/&lt;table&gt;/export/</code></td><td><code>db_explorer_export()</code></td><td>匯出單一表格</td></tr>
+  <tr><td><code>/dataflow/db-explorer/&lt;table&gt;/delete/</code></td><td><code>db_explorer_delete()</code></td><td>刪除（DROP）表格</td></tr>
+</table>
 
-<div class="card card-green">
-  <h3 style="margin-top:0">5.1 動態建立 Django Model — <code>type()</code> 三參數</h3>
-  <p>正常 Django Model 是寫死在程式碼中的。但 DataFlow 的 CSV 欄位<strong>每次都不一樣</strong>，無法事先寫死。Python 的 <code>type()</code> 可以在<strong>執行階段</strong>動態建立類別：</p>
-  <pre><code>MyModel = type('DynamicTable', (models.Model,), {
-    'name': models.CharField(max_length=200),
-    'price': models.FloatField(),
-    '__module__': 'dataflow.schema_manager',
-})
-# MyModel 現在就是真正的 Django Model！可查詢、可寫入</code></pre>
-  <p><strong>比喻：</strong>一般 Model 是「預售屋」— 格局在蓋之前就畫好了。動態 Model 是「3D 列印」— 給它欄位名稱和型別，現場印出一個資料表。</p>
-  <div class="ascii-box">CSV 欄位:  name, email, score
-     ↓  type() 動態建立
-class DynamicTable(models.Model):
-    name = CharField()  /  email = CharField()  /  score = FloatField()
-     ↓  SchemaEditor
-CREATE TABLE dataflow_dataset_N (name VARCHAR, email VARCHAR, score REAL)</div>
-</div>
+<!-- ── 9. 安裝 ── -->
+<h2>9. 安裝到其他 Django 項目</h2>
+<pre>
+<span class="c"># 1. 安裝套件</span>
+pip install -e /path/to/Dataflow_manager
 
-<div class="card card-green">
-  <h3 style="margin-top:0">5.2 自動產生 SQL — Django SchemaEditor</h3>
-  <p>SchemaEditor 將 Model 定義翻譯成資料庫的 CREATE TABLE 指令。不同資料庫自動產生不同 SQL。</p>
-  <pre><code>with connection.schema_editor() as editor:
-    editor.create_model(MyModel)
-# SQLite:   CREATE TABLE "dataflow_dataset_5" ("id" integer PRIMARY KEY AUTOINCREMENT, ...)
-# PostgreSQL: CREATE TABLE "dataflow_dataset_5" ("id" serial PRIMARY KEY, ...)</code></pre>
-</div>
+<span class="c"># 2. settings.py</span>
+INSTALLED_APPS = [<span class="s">'dataflow'</span>, ...]
 
-<div class="card card-green">
-  <h3 style="margin-top:0">5.3 動態註冊 Model — Django App Registry</h3>
-  <p>Model 建立後必須註冊到 Django 內部，Admin 和 ORM 才能找到它：</p>
-  <pre><code>apps.all_models.setdefault('dataflow', {})['dynamictable_5'] = MyModel
-apps.clear_cache()  # 清除 Django 內部快取</code></pre>
-</div>
+<span class="c"># 3. urls.py</span>
+path(<span class="s">'dataflow/'</span>, include(<span class="s">'dataflow.urls'</span>))
 
-<div class="card card-green">
-  <h3 style="margin-top:0">5.4 型別映射表 — 清洗型別 → SQL 型別</h3>
-  <p>連接「清洗規則」和「資料庫欄位」的翻譯器：</p>
-  <pre><code>RULE_TYPE_TO_FIELD = {
-    'int': lambda: IntegerField    'float': lambda: FloatField
-    'string': lambda: CharField    'email': lambda: CharField(255)
-    'url': lambda: URLField        'date': lambda: DateField
-    'boolean': lambda: BooleanField  'decimal': lambda: DecimalField
-}</code></pre>
-  <div class="ascii-box">CSV: score, type=float, min=0, max=100
-  → RULE_TYPE_TO_FIELD['float'](required=False, default=0.0)
-  → FloatField(null=False, default=0.0)
-  → SchemaEditor → CREATE TABLE ... (score REAL DEFAULT 0.0)</div>
-</div>
+<span class="c"># 4. 建立資料庫</span>
+python manage.py migrate
+</pre>
 
-<div class="card card-green">
-  <h3 style="margin-top:0">5.5 其他關鍵技術</h3>
-  <h4>Pandas — 多格式讀取</h4>
-  <pre><code>pd.read_csv('data.csv')  /  pd.read_excel('data.xlsx')  /  pd.read_json('data.json')
-pd.read_parquet('data.pq')  /  pd.read_feather('data.feather')</code></pre>
-  <h4>HTMX — 無 JavaScript 的動態介面</h4>
-  <pre><code>&lt;button hx-post="/dataset/5/delete/" hx-target="closest tr" hx-swap="outerHTML">刪除&lt;/button></code></pre>
-  <h4>三層 SQL Injection 防護</h4>
-  <div class="ascii-box">第 1 層：table_name 必須存在於 introspection.table_names() 白名單
-第 2 層：所有識別字透過 connection.ops.quote_name() 跳脫
-第 3 層：所有數值使用 %s 參數化查詢，永不拼接字串</div>
-</div>
-
-<!-- ====== 6. INSTALL ====== -->
-<h2>6. 如何在你的 Django 專案中使用？</h2>
-<div class="card">
-  <ol class="steps">
-    <li><strong>安裝套件</strong>
-      <pre><code>pip install -e /path/to/dataflow_manager</code></pre></li>
-    <li><strong>編輯 settings.py</strong>
-      <pre><code>INSTALLED_APPS = [..., 'dataflow']
-MIDDLEWARE = [..., 'dataflow.middleware.RefreshDynamicAdminsMiddleware']</code></pre></li>
-    <li><strong>編輯 urls.py</strong>
-      <pre><code>path('dataflow/', include('dataflow.urls'))</code></pre></li>
-    <li><strong>執行</strong>
-      <pre><code>python manage.py migrate
-python manage.py dataflow run data.csv --name "我的資料"</code></pre></li>
-  </ol>
-</div>
-
-<!-- ====== 7. FAQ ====== -->
-<h2>7. 常見問題</h2>
-<div class="card card-amber"><h3 style="margin-top:0">Q: 為什麼不用手動建立 SQL 表格？</h3><p>schema_manager.py 中的 SchemaEditor 會根據 CSV 欄位自動執行 CREATE TABLE。</p></div>
-<div class="card card-amber"><h3 style="margin-top:0">Q: 資料存在哪裡？</h3><p>存在你 Django 專案的資料庫中（預設 db.sqlite3）。和其他 App 的資料在同一個資料庫。</p></div>
-<div class="card card-amber"><h3 style="margin-top:0">Q: 支援哪些資料庫？</h3><p>SQLite、PostgreSQL、MySQL 都支援。SchemaEditor 自動處理 SQL 方言差異。</p></div>
-<div class="card card-amber"><h3 style="margin-top:0">Q: 可以匯入多大的檔案？</h3><p>已測試過 4800 行 CSV，約 3 秒完成。大檔案有 tqdm 進度條顯示。</p></div>
-<div class="card card-amber"><h3 style="margin-top:0">Q: CSV 有中文可以嗎？</h3><p>可以。全程 UTF-8，中文欄位名稱和內容都沒問題。</p></div>
-
-<p style="text-align:center;padding:40px 0 20px;color:var(--muted);font-size:14px">DataFlow Manager — 讓資料清洗變得簡單</p>
 </div>
 </body>
 </html>

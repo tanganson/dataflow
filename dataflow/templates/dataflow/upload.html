@@ -20,7 +20,7 @@
         <div class="card">
             <div class="card-header">
                 <h4 class="card-title">Data Source</h4>
-                <p class="text-muted mb-0">Single file or CSV folder</p>
+                <p class="text-muted mb-0">Single file or folder</p>
             </div>
             <div class="card-body">
                 <form method="post" enctype="multipart/form-data">
@@ -37,29 +37,12 @@
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" name="upload_mode"
                                        id="mode_folder" value="folder">
-                                <label class="form-check-label" for="mode_folder">CSV folder</label>
+                                <label class="form-check-label" for="mode_folder">Folder</label>
                             </div>
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Target</label>
-                        <div class="d-flex flex-wrap gap-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="target_mode"
-                                       id="target_dataset" value="dataset">
-                                <label class="form-check-label" for="target_dataset">Dataflow datasets</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="target_mode"
-                                       id="target_table" value="table" checked>
-                                <label class="form-check-label" for="target_table">Existing DB tables</label>
-                            </div>
-                        </div>
-                        <div class="form-text" id="target_help">
-                            CSV data is inserted into existing tables that the website already reads.
-                        </div>
-                    </div>
+                    <input type="hidden" name="target_mode" value="table">
 
                     <div class="mb-3">
                         <label for="file" class="form-label">File</label>
@@ -72,7 +55,7 @@
                         <label for="folder_files" class="form-label">Folder</label>
                         <input class="form-control" type="file" id="folder_files" name="folder_files"
                                accept=".csv" multiple webkitdirectory directory>
-                        <div class="form-text" id="folder_help">Every CSV file in the selected folder is imported as a separate dataset.</div>
+                        <div class="form-text" id="folder_help">Every file in the selected folder is imported as a separate dataset.</div>
                     </div>
 
                     <div class="row">

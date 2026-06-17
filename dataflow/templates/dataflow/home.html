@@ -82,27 +82,29 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <div class="row align-items-center">
-                    <div class="col">
+                <div class="row align-items-center dataflow-card-header-row">
+                    <div class="col-12 col-xxl">
                         <h4 class="card-title">All Datasets</h4>
                     </div>
-                    <div class="col-auto">
-                        <span class="badge bg-primary-subtle text-primary" id="selected-dataset-count">0 selected</span>
-                    </div>
-                    <div class="col-auto">
-                        <form method="post" action="{% url 'dataflow:dataset_bulk_action' %}" id="dataset-bulk-form" class="d-flex gap-2">
-                            {% csrf_token %}
-                            <select class="form-select form-select-sm" name="bulk_action" id="dataset-bulk-action" disabled>
-                                <option value="">Action...</option>
-                                <option value="delete">Delete selected</option>
-                            </select>
-                            <button type="submit" class="btn btn-sm btn-outline-primary" id="dataset-bulk-apply" disabled>Apply</button>
-                        </form>
-                    </div>
-                    <div class="col-auto">
-                        <a href="{% url 'dataflow:upload' %}" class="btn btn-primary">
-                            <i class="iconoir-upload-square-outline me-1"></i> Upload
-                        </a>
+                    <div class="col-12 col-xxl-auto">
+                        <div class="dataflow-header-controls">
+                            <span class="badge bg-primary-subtle text-primary" id="selected-dataset-count">0 selected</span>
+                            <form method="post" action="{% url 'dataflow:dataset_bulk_action' %}" id="dataset-bulk-form" class="d-flex dataflow-toolbar dataflow-bulk-form">
+                                {% csrf_token %}
+                                <div class="input-group input-group-sm dataflow-bulk-group">
+                                    <select class="form-select dataflow-action-select" name="bulk_action" id="dataset-bulk-action" disabled>
+                                        <option value="">Action...</option>
+                                        <option value="export_csv">Export as CSV (ZIP)</option>
+                                        <option value="export_json">Export as JSON (ZIP)</option>
+                                        <option value="delete">Delete selected</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-outline-primary" id="dataset-bulk-apply" disabled>Apply</button>
+                                </div>
+                            </form>
+                            <a href="{% url 'dataflow:upload' %}" class="btn btn-primary">
+                                <i class="iconoir-upload-square-outline me-1"></i> Upload
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -151,7 +153,15 @@
                 <div class="text-center py-5">
                     <i class="iconoir-database fs-1 text-muted"></i>
                     <h5 class="mt-3">No datasets yet</h5>
-                    <p class="text-muted"><a href="{% url 'dataflow:upload' %}">Upload your first CSV</a> to get started.</p>
+                    <p class="text-muted mb-3">Upload a new dataset, or link existing database tables as live datasets from DB Explorer.</p>
+                    <div class="d-flex flex-wrap justify-content-center gap-2">
+                        <a href="{% url 'dataflow:upload' %}" class="btn btn-primary">
+                            <i class="iconoir-upload-square-outline me-1"></i> Upload CSV
+                        </a>
+                        <a href="{% url 'dataflow:db_explorer' %}" class="btn btn-soft-info">
+                            <i class="iconoir-database me-1"></i> Link DB Tables
+                        </a>
+                    </div>
                 </div>
                 {% endif %}
             </div>

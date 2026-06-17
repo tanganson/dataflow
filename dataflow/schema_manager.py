@@ -43,10 +43,12 @@ RULE_TYPE_TO_FIELD = {
     'email':   lambda **kw: models.CharField(max_length=kw.pop('max_length', 255), null=not kw.pop('required', False), default=kw.pop('default', ''), blank=True),
     'phone':   lambda **kw: models.CharField(max_length=kw.pop('max_length', 20), null=not kw.pop('required', False), default=kw.pop('default', ''), blank=True),
     'url':     lambda **kw: models.URLField(max_length=kw.pop('max_length', 500), null=not kw.pop('required', False), default=kw.pop('default', ''), blank=True),
-    'image':   lambda **kw: models.URLField(max_length=kw.pop('max_length', 500), null=not kw.pop('required', False), default=kw.pop('default', ''), blank=True),
+    'image':   lambda **kw: models.CharField(max_length=kw.pop('max_length', 500), null=not kw.pop('required', False), default=kw.pop('default', ''), blank=True),
+    'text':    lambda **kw: models.TextField(null=not kw.pop('required', False), default=kw.pop('default', ''), blank=True),
     'boolean': lambda **kw: models.BooleanField(null=not kw.pop('required', False), default=kw.pop('default', False)),
     'date':     lambda **kw: models.DateField(null=not kw.pop('required', False), default=kw.pop('default', None)),
     'datetime': lambda **kw: models.DateTimeField(null=not kw.pop('required', False), default=kw.pop('default', None)),
+    'time':     lambda **kw: models.TimeField(null=not kw.pop('required', False), default=kw.pop('default', None)),
     'decimal':  lambda **kw: models.DecimalField(max_digits=kw.pop('max_digits', 18), decimal_places=kw.pop('decimal_places', 4), null=not kw.pop('required', False), default=kw.pop('default', None)),
 }
 
@@ -202,7 +204,7 @@ class SchemaManager:
             fields_json = rules or []
 
         safe_name = _sanitize_column_name(dataset.name).strip('_') or 'dataset'
-        table_name = f"{safe_name}_{dataset.id}"
+        table_name = safe_name
 
         schema_obj = DatasetSchema.objects.create(
             dataset=dataset,
@@ -259,6 +261,9 @@ def prepare_for_dynamic_table(record: Dict[str, Any], fields_json: List[Dict]) -
             result[safe_key] = date.fromisoformat(value)
         elif col_type == 'datetime' and isinstance(value, str):
             result[safe_key] = datetime.fromisoformat(value)
+        elif col_type == 'time' and isinstance(value, str):
+            from datetime import time as time_type
+            result[safe_key] = time_type.fromisoformat(value)
         elif col_type == 'decimal' and not isinstance(value, Decimal):
             result[safe_key] = Decimal(str(value))
         else:

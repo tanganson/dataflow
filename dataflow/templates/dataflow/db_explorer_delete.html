@@ -27,6 +27,12 @@
             <div class="card-body">
                 <p>You are about to permanently drop the table:</p>
                 <div class="alert alert-danger text-center fs-5 fw-bold">{{ table_name }}</div>
+                {% if not can_drop_schema %}
+                <p class="text-danger fw-semibold">This table is protected because it is managed by Django or Dataflow core. Schema drop is blocked.</p>
+                <div class="d-flex gap-2 justify-content-center mt-4">
+                    <a href="{% url 'dataflow:db_explorer_table' table_name %}" class="btn btn-secondary">Back</a>
+                </div>
+                {% else %}
                 <p class="text-danger fw-semibold">This action cannot be undone. All data in this table will be permanently lost.</p>
                 <p class="text-warning fw-semibold small">Any foreign key constraints from other tables referencing this table will also be dropped (CASCADE).</p>
 
@@ -37,6 +43,7 @@
                         <button type="submit" class="btn btn-danger">Drop Table</button>
                     </div>
                 </form>
+                {% endif %}
             </div>
         </div>
     </div>

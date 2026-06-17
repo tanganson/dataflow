@@ -1,0 +1,196 @@
+{
+    "id": {
+        "type": "int",
+        "required": false,
+        "default": 0
+    },
+    "code": {
+        "type": "string",
+        "required": false
+    },
+    "name": {
+        "type": "string",
+        "required": false
+    },
+    "content": {
+        "type": "string",
+        "required": false
+    },
+    "feature_1": {
+        "type": "string",
+        "required": false
+    },
+    "feature_2": {
+        "type": "string",
+        "required": false
+    },
+    "feature_3": {
+        "type": "string",
+        "required": false
+    },
+    "feature_4": {
+        "type": "float",
+        "required": false,
+        "default": 0.0
+    },
+    "feature_5": {
+        "type": "float",
+        "required": false,
+        "default": 0.0
+    },
+    "feature_6": {
+        "type": "float",
+        "required": false,
+        "default": 0.0
+    },
+    "feature_7": {
+        "type": "float",
+        "required": false,
+        "default": 0.0
+    },
+    "feature_8": {
+        "type": "float",
+        "required": false,
+        "default": 0.0
+    },
+    "total_lessons": {
+        "type": "int",
+        "required": false,
+        "default": 0
+    },
+    "hours_per_lesson": {
+        "type": "float",
+        "required": false,
+        "default": 0.0
+    },
+    "period_from": {
+        "type": "date",
+        "required": false
+    },
+    "period_to": {
+        "type": "date",
+        "required": false
+    },
+    "time_from": {
+        "type": "string",
+        "required": false
+    },
+    "time_to": {
+        "type": "string",
+        "required": false
+    },
+    "course_fee": {
+        "type": "int",
+        "required": false,
+        "default": 0
+    },
+    "course_status": {
+        "type": "string",
+        "required": false
+    },
+    "registation_expiry_date": {
+        "type": "string",
+        "required": false
+    },
+    "max_no_student": {
+        "type": "int",
+        "required": false,
+        "default": 0
+    },
+    "is_promote": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+    },
+    "file_status": {
+        "type": "string",
+        "required": false
+    },
+    "created_by": {
+        "type": "string",
+        "required": false
+    },
+    "created_datetime": {
+        "type": "string",
+        "required": false
+    },
+    "last_updated_by": {
+        "type": "string",
+        "required": false
+    },
+    "last_updated_datetime": {
+        "type": "string",
+        "required": false
+    },
+    "center_id": {
+        "type": "float",
+        "required": false,
+        "default": 0.0
+    },
+    "default_room_id": {
+        "type": "string",
+        "required": false
+    },
+    "sub_category_id": {
+        "type": "int",
+        "required": false,
+        "default": 0
+    },
+    "teacher_id": {
+        "type": "int",
+        "required": false,
+        "default": 0
+    },
+    "template_id": {
+        "type": "string",
+        "required": false
+    },
+    "is_web_publish": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+    },
+    "photo": {
+        "type": "string",
+        "required": false
+    },
+    "age_group": {
+        "type": "string",
+        "required": false
+    },
+    "is_fri": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+    },
+    "is_mon": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+    },
+    "is_sat": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+    },
+    "is_sun": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+    },
+    "is_thu": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+    },
+    "is_tue": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+    },
+    "is_wed": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+    }
+}

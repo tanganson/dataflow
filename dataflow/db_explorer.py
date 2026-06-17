@@ -1,16 +1,14 @@
 """Database introspection and safe SQL query utilities for the DB Explorer."""
 from collections import OrderedDict
 
+from django.apps import apps
 from django.db import connection
 
 
-APP_TABLE_PREFIXES = [
-    "doctors_", "listings_", "contacts_", "accounts_", "pages_",
-]
 SYSTEM_TABLE_PREFIXES = [
     "auth_", "django_",
 ]
-DATAFLOW_TABLE_PREFIXES = [
+DATAFLOW_CORE_TABLE_PREFIXES = [
     "dataflow_",
 ]
 
@@ -34,6 +32,24 @@ TYPE_CATEGORY = {
 }
 
 
+def get_django_model_tables():
+    """Return DB tables owned by installed Django models."""
+    return {
+        model._meta.db_table
+        for model in apps.get_models()
+        if model._meta.managed
+    }
+
+
+def get_dataflow_managed_tables():
+    """Return dynamic dataset tables recorded by Dataflow schemas."""
+    try:
+        from dataflow.models import DatasetSchema
+        return set(DatasetSchema.objects.values_list("table_name", flat=True))
+    except Exception:
+        return set()
+
+
 def _field_type_name(type_code: int) -> str:
     mapping = connection.introspection.data_types_reverse
     try:
@@ -43,25 +59,44 @@ def _field_type_name(type_code: int) -> str:
 
 
 def _categorize(table_name: str) -> str:
-    for prefix in APP_TABLE_PREFIXES:
-        if table_name.startswith(prefix):
-            return "application"
     for prefix in SYSTEM_TABLE_PREFIXES:
         if table_name.startswith(prefix):
             return "system"
-    for prefix in DATAFLOW_TABLE_PREFIXES:
+    for prefix in DATAFLOW_CORE_TABLE_PREFIXES:
         if table_name.startswith(prefix):
-            return "dataflow"
-    return "third-party"
+            return "dataflow-core"
+    if table_name in get_dataflow_managed_tables():
+        return "dataflow-managed"
+    if table_name in get_django_model_tables():
+        return "django-app"
+    return "external"
 
 
 def _category_label(cat: str) -> str:
     return {
-        "application": "Application",
-        "dataflow": "Dataflow",
+        "django-app": "Django App",
+        "dataflow-core": "Dataflow Core",
+        "dataflow-managed": "Dataflow Dataset",
         "system": "System",
-        "third-party": "Third-Party",
+        "external": "External",
     }.get(cat, cat)
+
+
+def is_schema_drop_allowed(table_name: str) -> bool:
+    """Whether Dataflow may drop/recreate the table schema."""
+    return _categorize(table_name) in {"dataflow-managed", "external", "django-app"}
+
+
+def is_row_replace_allowed(table_name: str) -> bool:
+    """Whether Dataflow may delete rows and re-import data without changing schema."""
+    return _categorize(table_name) in {"django-app", "dataflow-managed", "external"}
+
+
+def is_create_missing_table_allowed(table_name: str) -> bool:
+    """Whether CSV import may create a table with this name."""
+    if table_name in get_django_model_tables():
+        return False
+    return _categorize(table_name) in {"external", "dataflow-managed"}
 
 
 def _type_category(pg_type: str) -> str:
@@ -83,12 +118,15 @@ def get_all_tables():
             cols = connection.introspection.get_table_description(cursor, name)
             col_count = len(cols)
 
+            category = _categorize(name)
             tables.append({
                 "name": name,
                 "row_count": row_count,
                 "col_count": col_count,
-                "category": _categorize(name),
-                "category_label": _category_label(_categorize(name)),
+                "category": category,
+                "category_label": _category_label(category),
+                "can_drop_schema": is_schema_drop_allowed(name),
+                "can_replace_rows": is_row_replace_allowed(name),
             })
 
     return tables

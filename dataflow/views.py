@@ -1,19 +1,21 @@
 """Django views for Dataflow Manager web UI."""
 import os
+import json
 import tempfile
 
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect
 from django.http import Http404, HttpResponse
 from django.contrib import messages
+from django.core.serializers.json import DjangoJSONEncoder
 from django.core.paginator import Paginator, EmptyPage
 from django.db import connection, transaction
-from django.db.models import Count
-from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
-from dataflow.models import Dataset, DataRecord, CleaningLog, DatasetSchema
-from dataflow.schema_manager import SchemaManager
-from dataflow.cli import Pipeline, clean_dataset, delete_dataset as delete_dataset_fn
+from dataflow.db_explorer import (
+    is_create_missing_table_allowed,
+    is_row_replace_allowed,
+    is_schema_drop_allowed,
+)
 
 PAGE_SIZE = 50
 PAGE_SIZE_OPTIONS = [50, 100, 200]
@@ -29,62 +31,6 @@ def _save_uploaded_file(uploaded_file, suffix):
         uploaded_file.seek(0)
     return tmp_path
 
-
-def _pipeline_dataset_name(uploaded_file, name='', use_prefix=False):
-    file_stem = os.path.splitext(os.path.basename(uploaded_file.name))[0]
-    file_stem = file_stem.strip() or 'dataset'
-    name = name.strip()
-    if use_prefix and name:
-        return f'{name}_{file_stem}'
-    return name or file_stem
-
-
-def _run_uploaded_pipeline(uploaded_file, dataset_name, rules_path=None, replace=False, dry_run=False):
-    ext = os.path.splitext(uploaded_file.name)[1].lower() or '.csv'
-    tmp_path = _save_uploaded_file(uploaded_file, ext)
-    try:
-        pipeline = Pipeline(dataset_name)
-        pipeline.load_file(tmp_path)
-
-        if rules_path:
-            pipeline.load_rules_file(rules_path)
-        else:
-            pipeline.auto_rules()
-
-        pipeline.clean()
-
-        result = {
-            'name': dataset_name,
-            'valid_rows': len(pipeline.valid_rows),
-            'invalid_rows': len(pipeline.raw_rows) - len(pipeline.valid_rows),
-            'total_rows': len(pipeline.raw_rows),
-            'columns': len(pipeline.rules),
-            'dataset': None,
-        }
-
-        if dry_run:
-            pipeline.report()
-            return result
-
-        pipeline.store(replace=replace)
-        result['dataset'] = pipeline.dataset_obj
-        return result
-    finally:
-        os.unlink(tmp_path)
-
-
-def _normalize_db_value(value):
-    if value is None:
-        return None
-    try:
-        import pandas as pd
-        if pd.isna(value):
-            return None
-    except (TypeError, ValueError):
-        pass
-    if isinstance(value, str) and value.strip() == '':
-        return None
-    return value
 
 
 def _db_field_type_name(column):
@@ -168,20 +114,22 @@ def _reset_table_sequence(table_name, pk_column):
 
 def _import_uploaded_csv_to_table(uploaded_file, table_name, replace=False, dry_run=False):
     ext = os.path.splitext(uploaded_file.name)[1].lower()
-    if ext != '.csv':
-        raise ValueError('Only CSV files can be imported into existing DB tables.')
+    if ext not in ('.csv', '.json'):
+        raise ValueError('Only CSV and JSON files can be imported into existing DB tables.')
 
     table_name = table_name.strip()
     if not table_name:
         raise ValueError('Target table name is required.')
     if table_name not in connection.introspection.table_names():
         raise ValueError(f'Target table "{table_name}" does not exist.')
+    if replace and not is_row_replace_allowed(table_name):
+        raise ValueError(f'Table "{table_name}" cannot be row-replaced by Dataflow.')
 
-    tmp_path = _save_uploaded_file(uploaded_file, '.csv')
+    tmp_path = _save_uploaded_file(uploaded_file, ext)
     try:
         import pandas as pd
 
-        df = pd.read_csv(tmp_path)
+        df = pd.read_csv(tmp_path) if ext == '.csv' else pd.read_json(tmp_path)
         records = df.to_dict(orient='records')
 
         with connection.cursor() as cursor:
@@ -244,23 +192,34 @@ def _import_uploaded_csv_to_table(uploaded_file, table_name, replace=False, dry_
         os.unlink(tmp_path)
 
 
-def _delete_dataset_object(dataset):
-    schema = DatasetSchema.objects.filter(dataset=dataset).first()
-    if schema and SchemaManager.table_exists(schema.table_name):
-        SchemaManager.drop_table(schema.table_name)
-    dataset.delete()
-
-
-def _is_protected_table(table_name):
-    protected_prefixes = ('auth_', 'django_', 'dataflow_')
-    return table_name.startswith(protected_prefixes)
-
-
 def _drop_db_table(table_name, cascade=False):
+    if not is_schema_drop_allowed(table_name):
+        raise ValueError(f'Table "{table_name}" is protected from schema drop.')
     quoted = connection.ops.quote_name(table_name)
     cascade_sql = ' CASCADE' if cascade and connection.vendor == 'postgresql' else ''
     with connection.cursor() as cursor:
         cursor.execute(f'DROP TABLE IF EXISTS {quoted}{cascade_sql}')
+
+
+def _extract_sql_table_name(stmt, verb):
+    import re
+    match = re.search(
+        rf'^\s*{verb}\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["\']?([A-Za-z_][A-Za-z0-9_]*)["\']?',
+        stmt,
+        re.IGNORECASE,
+    )
+    return match.group(1) if match else None
+
+
+def _validate_sql_statement_safety(stmt):
+    for verb in ('DROP', 'ALTER', 'TRUNCATE'):
+        table_name = _extract_sql_table_name(stmt, verb)
+        if table_name and not is_schema_drop_allowed(table_name):
+            raise ValueError(f'SQL {verb} TABLE is not allowed for protected table "{table_name}".')
+
+    table_name = _extract_sql_table_name(stmt, 'CREATE')
+    if table_name and not is_create_missing_table_allowed(table_name):
+        raise ValueError(f'SQL CREATE TABLE is not allowed for protected table "{table_name}".')
 
 
 def _sql_type_for_series(series):
@@ -272,22 +231,34 @@ def _sql_type_for_series(series):
         return 'BIGINT'
     if pd.api.types.is_float_dtype(series):
         return 'DOUBLE PRECISION' if connection.vendor == 'postgresql' else 'REAL'
+    if pd.api.types.is_datetime64_any_dtype(series):
+        return 'TIMESTAMPTZ'
+    if series.dtype == object:
+        sample = series.dropna().head(10)
+        if len(sample) > 0 and sample.astype(str).str.match(
+            r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}'
+        ).all():
+            return 'TIMESTAMPTZ'
     return 'TEXT'
 
 
 def _create_table_from_csv(uploaded_file, table_name):
     ext = os.path.splitext(uploaded_file.name)[1].lower()
-    if ext != '.csv':
-        raise ValueError('Only CSV files can create missing DB tables.')
+    if ext not in ('.csv', '.json'):
+        raise ValueError('Only CSV and JSON files can create missing DB tables.')
 
-    tmp_path = _save_uploaded_file(uploaded_file, '.csv')
+    from dataflow.db_explorer import SYSTEM_TABLE_PREFIXES, DATAFLOW_CORE_TABLE_PREFIXES
+    for prefix in SYSTEM_TABLE_PREFIXES + DATAFLOW_CORE_TABLE_PREFIXES:
+        if table_name.startswith(prefix):
+            raise ValueError(f'Table name "{table_name}" is protected and cannot be created.')
+
+    import pandas as pd
+    tmp_path = _save_uploaded_file(uploaded_file, ext)
     try:
-        import pandas as pd
-
-        df = pd.read_csv(tmp_path, nrows=200)
+        df = pd.read_csv(tmp_path, nrows=200) if ext == '.csv' else pd.read_json(tmp_path).head(200)
         columns = [str(col) for col in df.columns]
         if not columns:
-            raise ValueError(f'Cannot create table "{table_name}" from a CSV with no columns.')
+            raise ValueError(f'Cannot create table "{table_name}" from a file with no columns.')
 
         col_defs = []
         used = set()
@@ -346,6 +317,8 @@ def _delete_table_rows_for_replace(table_names):
     with transaction.atomic():
         with connection.cursor() as cursor:
             for table_name in reversed(table_names):
+                if not is_row_replace_allowed(table_name):
+                    raise ValueError(f'Table "{table_name}" cannot be row-replaced by Dataflow.')
                 quoted_table = connection.ops.quote_name(table_name)
                 cursor.execute(f'DELETE FROM {quoted_table}')
 
@@ -371,26 +344,50 @@ def _page_size_context(page_size_param):
     }
 
 
-# ── Dashboard ──
-@ensure_csrf_cookie
-def home(request):
-    datasets = Dataset.objects.annotate(
-        record_count=Count('datarecord')
-    ).order_by('-updated_at')
+def _prepare_dataframe_for_excel(df):
+    """Convert timezone-aware datetimes and non-Excel-safe types for Excel export."""
+    import pandas as pd
+    from datetime import datetime, time
+    from decimal import Decimal
 
-    for ds in datasets:
-        ds.is_ref = ds.description and ds.description.startswith('__ref:')
+    if df.empty:
+        return df
 
-    stats = {
-        'total': datasets.count(),
-        'records': DataRecord.objects.count(),
-        'schemas': DatasetSchema.objects.count(),
-        'logs': CleaningLog.objects.count(),
-    }
-    return render(request, 'dataflow/home.html', {
-        'datasets': datasets,
-        'stats': stats,
-    })
+    df = df.copy()
+    for column in df.columns:
+        series = df[column]
+        if pd.api.types.is_datetime64tz_dtype(series):
+            df[column] = series.dt.tz_convert(None)
+            continue
+
+        if series.dtype == 'object':
+            def _safe(value):
+                if isinstance(value, datetime) and value.tzinfo is not None:
+                    return value.replace(tzinfo=None)
+                if isinstance(value, time):
+                    return value.strftime('%H:%M:%S')
+                if isinstance(value, Decimal):
+                    return float(value)
+                return value
+            df[column] = series.map(_safe)
+    return df
+
+
+def _dataframe_records_for_json(df):
+    """Return JSON-safe records without pandas datetime serialization pitfalls."""
+    import datetime
+    from decimal import Decimal
+    if df.empty:
+        return []
+    clean = df.astype(object).where(df.notna(), None)
+    records = clean.to_dict(orient='records')
+    for row in records:
+        for k, v in row.items():
+            if isinstance(v, (datetime.date, datetime.datetime, datetime.time)):
+                row[k] = v.isoformat()
+            elif isinstance(v, Decimal):
+                row[k] = str(v)
+    return records
 
 
 # ── Upload & Run ──
@@ -409,23 +406,23 @@ def upload(request):
             messages.error(request, 'Please select a file or a folder.')
             return render(request, 'dataflow/upload.html')
 
-        if target_mode not in ('dataset', 'table'):
-            target_mode = 'table' if folder_files else 'dataset'
+        target_mode = 'table'
 
         rules_path = None
         if rules_file:
             rules_path = _save_uploaded_file(rules_file, '.json')
 
         if folder_files:
+            importable_exts = {'.csv', '.json'}
             csv_files = [
                 uploaded_file for uploaded_file in folder_files
-                if os.path.splitext(uploaded_file.name)[1].lower() == '.csv'
+                if os.path.splitext(uploaded_file.name)[1].lower() in importable_exts
             ]
 
             if not csv_files:
                 if rules_path:
                     os.unlink(rules_path)
-                messages.error(request, 'No CSV files were found in the selected folder.')
+                messages.error(request, 'No CSV or JSON files were found in the selected folder.')
                 return render(request, 'dataflow/upload.html')
 
             imported = []
@@ -471,46 +468,22 @@ def upload(request):
                             ))
                         except Exception as exc:
                             failed.append(f'{uploaded_file.name}: {exc}')
-                else:
-                    for uploaded_file in csv_files:
-                        target_name = _pipeline_dataset_name(
-                            uploaded_file,
-                            name,
-                            use_prefix=True,
-                        )
-                        try:
-                            imported.append(_run_uploaded_pipeline(
-                                uploaded_file,
-                                target_name,
-                                rules_path=rules_path,
-                                replace=replace,
-                                dry_run=dry_run,
-                            ))
-                        except Exception as exc:
-                            failed.append(f'{uploaded_file.name}: {exc}')
             finally:
                 if rules_path:
                     os.unlink(rules_path)
 
             if imported:
                 action = 'Dry-run checked' if dry_run else 'Imported'
-                if target_mode == 'table':
-                    total_rows = sum(item['rows'] for item in imported)
-                    messages.success(
-                        request,
-                        f'{action} {len(imported)} existing DB table(s) from folder: {total_rows} rows.'
-                    )
-                else:
-                    total_rows = sum(item['valid_rows'] for item in imported)
-                    messages.success(
-                        request,
-                        f'{action} {len(imported)} CSV dataset(s) from folder: {total_rows} valid rows.'
-                    )
+                total_rows = sum(item['rows'] for item in imported)
+                messages.success(
+                    request,
+                    f'{action} {len(imported)} existing DB table(s) from folder: {total_rows} rows.'
+                )
 
             if failed:
                 sample = '; '.join(failed[:5])
                 extra = f' ({len(failed) - 5} more)' if len(failed) > 5 else ''
-                messages.warning(request, f'{len(failed)} CSV file(s) failed: {sample}{extra}')
+                messages.warning(request, f'{len(failed)} file(s) failed: {sample}{extra}')
 
             if created_missing:
                 sample = ', '.join(created_missing[:5])
@@ -522,7 +495,7 @@ def upload(request):
                 extra = f' ({len(skipped_missing) - 5} more)' if len(skipped_missing) > 5 else ''
                 messages.info(request, f'Skipped {len(skipped_missing)} CSV file(s) with no matching DB table: {sample}{extra}')
 
-            return redirect('dataflow:home')
+            return redirect('dataflow:db_explorer')
 
         ext = os.path.splitext(file.name)[1].lower() or '.csv'
 
@@ -537,15 +510,22 @@ def upload(request):
             table_name = None
             for stmt in statements:
                 if stmt.upper().startswith('CREATE TABLE'):
-                    # Parse "CREATE TABLE "table_name" (...)"
-                    import re
-                    match = re.search(r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["\']?(\w+)["\']?', stmt, re.IGNORECASE)
-                    if match:
-                        table_name = match.group(1)
+                    table_name = _extract_sql_table_name(stmt, 'CREATE')
                     break
 
+            try:
+                for stmt in statements:
+                    _validate_sql_statement_safety(stmt)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect('dataflow:upload')
+
             if replace and table_name:
-                _drop_db_table(table_name, cascade=True)
+                try:
+                    _drop_db_table(table_name, cascade=True)
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                    return redirect('dataflow:upload')
 
             executed = 0
             errors = []
@@ -577,342 +557,35 @@ def upload(request):
             messages.error(request, f'Unsupported file format: {ext}')
             return render(request, 'dataflow/upload.html')
 
-        if target_mode == 'table':
-            try:
-                table_name = name or os.path.splitext(os.path.basename(file.name))[0]
-                created_table = False
-                if table_name not in connection.introspection.table_names():
-                    if create_missing_tables and not dry_run:
-                        _create_table_from_csv(file, table_name)
-                        created_table = True
-                    else:
-                        raise ValueError(f'Target table "{table_name}" does not exist.')
-
-                result = _import_uploaded_csv_to_table(
-                    file,
-                    table_name,
-                    replace=replace,
-                    dry_run=dry_run,
-                )
-                action = 'Dry-run checked' if dry_run else 'Imported'
-                skipped = ''
-                if result['skipped_columns']:
-                    skipped = f' Skipped columns not in table: {", ".join(result["skipped_columns"][:5])}.'
-                created = f' Created missing table "{table_name}".' if created_table else ''
-                messages.success(
-                    request,
-                    f'{action} "{file.name}" into table "{result["table"]}": '
-                    f'{result["rows"]} rows, {result["columns"]} matched columns.{created}{skipped}'
-                )
-                if dry_run:
-                    return redirect('dataflow:db_explorer')
-                return redirect('dataflow:db_explorer_table', table_name=result['table'])
-            finally:
-                if rules_path:
-                    os.unlink(rules_path)
-
         try:
-            result = _run_uploaded_pipeline(
-                file,
-                _pipeline_dataset_name(file, name),
-                rules_path=rules_path,
-                replace=replace,
-                dry_run=dry_run,
-            )
+            table_name = name or os.path.splitext(os.path.basename(file.name))[0]
+            created_table = False
+            if table_name not in connection.introspection.table_names():
+                if create_missing_tables and not dry_run:
+                    _create_table_from_csv(file, table_name)
+                    created_table = True
+                else:
+                    raise ValueError(f'Target table "{table_name}" does not exist.')
+
+            result = _import_uploaded_csv_to_table(file, table_name, replace=replace, dry_run=dry_run)
+            action = 'Dry-run checked' if dry_run else 'Imported'
+            skipped = ''
+            if result['skipped_columns']:
+                skipped = f' Skipped columns not in table: {", ".join(result["skipped_columns"][:5])}.'
+            created = f' Created missing table "{table_name}".' if created_table else ''
+            messages.success(request,
+                f'{action} "{file.name}" into table "{result["table"]}": '
+                f'{result["rows"]} rows, {result["columns"]} matched columns.{created}{skipped}')
             if dry_run:
-                messages.info(request,
-                    f'Dry-run: {result["valid_rows"]} valid, '
-                    f'{result["invalid_rows"]} invalid '
-                    f'out of {result["total_rows"]} rows.')
-                return redirect('dataflow:home')
-            else:
-                ds = result['dataset']
-                messages.success(request,
-                    f'Imported "{ds.name}": {result["valid_rows"]} rows, '
-                    f'{result["columns"]} columns.')
-                return redirect('dataflow:dataset_detail', dataset_id=ds.id)
+                return redirect('dataflow:db_explorer')
+            return redirect('dataflow:db_explorer_table', table_name=result['table'])
+        except Exception as exc:
+            messages.error(request, str(exc))
         finally:
             if rules_path:
                 os.unlink(rules_path)
 
     return render(request, 'dataflow/upload.html')
-
-
-@require_POST
-def dataset_bulk_action(request):
-    action = request.POST.get('bulk_action', '').strip()
-    raw_ids = request.POST.getlist('dataset_ids')
-
-    dataset_ids = []
-    for raw_id in raw_ids:
-        try:
-            dataset_ids.append(int(raw_id))
-        except (TypeError, ValueError):
-            continue
-
-    if not dataset_ids:
-        messages.warning(request, 'No datasets selected.')
-        return redirect('dataflow:home')
-
-    datasets = list(Dataset.objects.filter(id__in=dataset_ids))
-    if action == 'delete':
-        for dataset in datasets:
-            _delete_dataset_object(dataset)
-        messages.success(request, f'Deleted {len(datasets)} selected dataset(s).')
-    else:
-        messages.error(request, 'Unsupported dataset bulk action.')
-
-    return redirect('dataflow:home')
-
-
-# ── Dataset Detail ──
-def dataset_detail(request, dataset_id):
-    ds = get_object_or_404(Dataset, pk=dataset_id)
-
-    # Reference dataset: read live from source table
-    is_ref = ds.description and ds.description.startswith('__ref:')
-    ds.is_ref = is_ref  # for template
-    ref_table = ds.description.split(':', 1)[1] if is_ref else None
-
-    if is_ref and ref_table and ref_table in connection.introspection.table_names():
-        from .db_explorer import get_table_data, get_table_schema
-
-        columns = get_table_schema(ref_table)
-        field_names = [c['name'] for c in columns]
-        page_size, page_size_param = _get_page_size(request)
-        page_num = 1 if page_size is None else int(request.GET.get('page', 1))
-
-        if page_size is None:
-            _, total_rows, col_names, pk_column = get_table_data(ref_table, page=1, page_size=1)
-            effective_page_size = total_rows or 1
-        else:
-            effective_page_size = page_size
-
-        row_data, total_rows, col_names, pk_column = get_table_data(
-            ref_table,
-            page=page_num,
-            page_size=effective_page_size,
-        )
-
-        paginator = Paginator(range(total_rows), effective_page_size)
-        try:
-            rows = paginator.page(page_num)
-        except EmptyPage:
-            rows = paginator.page(1)
-
-        context = {
-            'ds': ds,
-            'schema': None,
-            'field_names': field_names,
-            'rows': rows,
-            'row_data': row_data,
-            'total_rows': total_rows,
-            'logs': [],
-        }
-        context.update(_page_size_context(page_size_param))
-        return render(request, 'dataflow/dataset_detail.html', context)
-
-    # Original logic for uploaded datasets
-    ds.is_ref = False
-    schema = None
-    field_names = []
-    try:
-        schema = ds.schema
-        field_names = [f.get('name', '') for f in schema.fields_json]
-    except DatasetSchema.DoesNotExist:
-        pass
-
-    model = SchemaManager.get_model_for_dataset(ds.id)
-    if model:
-        queryset = model.objects.all().order_by('id')
-        total_rows = model.objects.count()
-    else:
-        queryset = DataRecord.objects.filter(dataset=ds).order_by('id')
-        total_rows = queryset.count()
-
-    page_size, page_size_param = _get_page_size(request)
-    page = 1 if page_size is None else request.GET.get('page', 1)
-    effective_page_size = (total_rows or 1) if page_size is None else page_size
-    paginator = Paginator(queryset, effective_page_size)
-    try:
-        rows = paginator.page(page)
-    except EmptyPage:
-        rows = paginator.page(1)
-
-    row_data = []
-    for r in rows:
-        if hasattr(r, 'data'):
-            row_data.append(r.data)
-        else:
-            d = {f.name: getattr(r, f.name) for f in r._meta.fields if f.name != 'id'}
-            row_data.append(d)
-
-    if not field_names and row_data:
-        field_names = list(row_data[0].keys())
-
-    logs = CleaningLog.objects.filter(dataset=ds).order_by('-created_at')[:5]
-
-    context = {
-        'ds': ds,
-        'schema': schema,
-        'field_names': field_names,
-        'rows': rows,
-        'row_data': row_data,
-        'total_rows': total_rows,
-        'logs': logs,
-    }
-    context.update(_page_size_context(page_size_param))
-    return render(request, 'dataflow/dataset_detail.html', context)
-
-
-# ── Re-clean (HTMX) ──
-def dataset_clean(request, dataset_id):
-    ds = get_object_or_404(Dataset, pk=dataset_id)
-    rules_file = request.FILES.get('rules_file')
-
-    rules_path = None
-    if rules_file:
-        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp:
-            for chunk in rules_file.chunks():
-                tmp.write(chunk)
-            rules_path = tmp.name
-
-    try:
-        if rules_path:
-            clean_dataset(ds.name, rules_path)
-        else:
-            clean_dataset(ds.name)
-        messages.success(request, f'Re-cleaned "{ds.name}" successfully.')
-    finally:
-        if rules_path:
-            os.unlink(rules_path)
-
-    return redirect('dataflow:dataset_detail', dataset_id=ds.id)
-
-
-# ── Export ──
-def dataset_export(request, dataset_id):
-    ds = get_object_or_404(Dataset, pk=dataset_id)
-    fmt = request.GET.get('format', 'csv')
-
-    import pandas as pd
-    import io
-
-    # Reference dataset: export from source table
-    is_ref = ds.description and ds.description.startswith('__ref:')
-    ref_table = ds.description.split(':', 1)[1] if is_ref else None
-
-    if is_ref and ref_table and ref_table in connection.introspection.table_names():
-        from .db_explorer import get_table_schema
-        columns = get_table_schema(ref_table)
-        col_names = [c['name'] for c in columns]
-        quoted_table = connection.ops.quote_name(ref_table)
-        quoted_cols = [connection.ops.quote_name(c) for c in col_names]
-        select_list = ", ".join(quoted_cols)
-
-        with connection.cursor() as cursor:
-            cursor.execute(f"SELECT {select_list} FROM {quoted_table}")
-            rows = cursor.fetchall()
-
-        data = [{col_names[i]: row[i] for i in range(len(col_names))} for row in rows]
-        df = pd.DataFrame(data)
-
-    else:
-        model = SchemaManager.get_model_for_dataset(ds.id)
-        if model:
-            qs = model.objects.all().values()
-            df = pd.DataFrame(list(qs))
-            if 'id' in df.columns:
-                df = df.drop(columns=['id'])
-        else:
-            records = DataRecord.objects.filter(dataset=ds).values_list('data', flat=True)
-            df = pd.DataFrame(list(records))
-
-    if fmt == 'csv':
-        buf = io.StringIO()
-        df.to_csv(buf, index=False)
-        resp = HttpResponse(buf.getvalue(), content_type='text/csv')
-        resp['Content-Disposition'] = f'attachment; filename="{ds.name}.csv"'
-    elif fmt == 'json':
-        resp = HttpResponse(
-            df.to_json(orient='records', indent=2, force_ascii=False),
-            content_type='application/json')
-        resp['Content-Disposition'] = f'attachment; filename="{ds.name}.json"'
-    elif fmt == 'sql':
-        from datetime import date, datetime, time
-        from decimal import Decimal
-        from django.db import connection as db_conn
-
-        if is_ref and ref_table:
-            with db_conn.cursor() as c:
-                raw_cols = db_conn.introspection.get_table_description(c, ref_table)
-                pk_name = db_conn.introspection.get_primary_key_column(c, ref_table)
-
-            type_map = {
-                16: 'BOOLEAN', 20: 'BIGINT', 21: 'SMALLINT', 23: 'INTEGER',
-                25: 'TEXT', 700: 'FLOAT', 701: 'FLOAT', 1042: 'VARCHAR',
-                1043: 'VARCHAR', 1082: 'DATE', 1083: 'TIME', 1114: 'TIMESTAMP',
-                1184: 'TIMESTAMPTZ', 1700: 'NUMERIC', 3802: 'JSONB',
-            }
-            col_defs = []
-            for col in raw_cols:
-                qc = db_conn.ops.quote_name(col.name)
-                sql_type = type_map.get(col.type_code, 'TEXT')
-                if sql_type == 'VARCHAR' and col.internal_size:
-                    sql_type = f'VARCHAR({col.internal_size})'
-                null_cl = 'NULL' if col.null_ok else 'NOT NULL'
-                pk_cl = ' PRIMARY KEY' if col.name == pk_name else ''
-                col_defs.append(f'    {qc} {sql_type} {null_cl}{pk_cl}')
-
-            sql_lines = [f'CREATE TABLE {quoted_table} (']
-            sql_lines.append(',\n'.join(col_defs))
-            sql_lines.append('\n);\n')
-        else:
-            # Uploaded dataset: generate basic CREATE TABLE from DataFrame
-            sql_lines = [f'-- SQL Dump for dataset: {ds.name}\n']
-
-        for _, row in df.iterrows():
-            vals = []
-            for col_name in df.columns:
-                val = row[col_name]
-                if pd.isna(val):
-                    vals.append('NULL')
-                elif isinstance(val, (bool,)):
-                    vals.append('TRUE' if val else 'FALSE')
-                elif isinstance(val, (int, float)):
-                    vals.append(str(val))
-                else:
-                    escaped = str(val).replace("'", "''")
-                    vals.append(f"'{escaped}'")
-            sql_lines.append(f'INSERT INTO "{ds.name}" VALUES ({", ".join(vals)});\n')
-
-        resp = HttpResponse('\n'.join(sql_lines), content_type='text/plain')
-        resp['Content-Disposition'] = f'attachment; filename="{ds.name}.sql"'
-    else:
-        buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False)
-        resp = HttpResponse(
-            buf.getvalue(),
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        resp['Content-Disposition'] = f'attachment; filename="{ds.name}.xlsx"'
-
-    return resp
-
-
-# ── Delete (HTMX) ──
-def dataset_delete(request, dataset_id):
-    ds = get_object_or_404(Dataset, pk=dataset_id)
-    if request.method == 'POST':
-        name = ds.name
-        delete_dataset_fn(name)
-        if request.headers.get('HX-Request') == 'true':
-            resp = HttpResponse('')
-            resp['HX-Redirect'] = '/dataflow/'
-            return resp
-        messages.success(request, f'Deleted "{name}".')
-        return redirect('dataflow:home')
-    return render(request, 'dataflow/delete_confirm.html', {'ds': ds})
 
 
 # ── Database Explorer ──
@@ -924,10 +597,13 @@ def db_explorer(request):
 
     stats = {
         'total': len(tables),
-        'application': sum(1 for t in tables if t['category'] == 'application'),
-        'dataflow': sum(1 for t in tables if t['category'] == 'dataflow'),
+        'application': sum(1 for t in tables if t['category'] == 'django-app'),
+        'dataflow': sum(
+            1 for t in tables
+            if t['category'] in ('dataflow-core', 'dataflow-managed')
+        ),
         'system': sum(1 for t in tables if t['category'] == 'system'),
-        'third_party': sum(1 for t in tables if t['category'] == 'third-party'),
+        'third_party': sum(1 for t in tables if t['category'] == 'external'),
         'total_rows': sum(t['row_count'] for t in tables),
     }
 
@@ -948,24 +624,38 @@ def db_explorer_bulk_action(request):
         messages.warning(request, 'No database tables selected.')
         return redirect('dataflow:db_explorer')
 
-    if action == 'link_dataset':
-        linked = 0
-        for table_name in table_names:
-            Dataset.objects.filter(name=table_name).delete()
-            Dataset.objects.create(
-                name=table_name,
-                description=f'__ref:{table_name}',
-                raw_data=[],
-            )
-            linked += 1
-        messages.success(request, f'Linked {linked} selected table(s) as live datasets.')
+    if action == 'export_csv' or action == 'export_xlsx' or action == 'export_json':
+        import io, zipfile
+        import pandas as pd
+        fmt = action.split('_')[1]
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for table_name in table_names:
+                quoted = connection.ops.quote_name(table_name)
+                with connection.cursor() as cursor:
+                    cursor.execute(f'SELECT * FROM {quoted}')
+                    cols = [d[0] for d in cursor.description]
+                    rows = cursor.fetchall()
+                df = pd.DataFrame(rows, columns=cols)
+                if fmt == 'csv':
+                    zf.writestr(f'{table_name}.csv', df.to_csv(index=False))
+                elif fmt == 'xlsx':
+                    xbuf = io.BytesIO()
+                    df = _prepare_dataframe_for_excel(df)
+                    with pd.ExcelWriter(xbuf, engine='openpyxl') as w:
+                        df.to_excel(w, index=False)
+                    zf.writestr(f'{table_name}.xlsx', xbuf.getvalue())
+                elif fmt == 'json':
+                    zf.writestr(f'{table_name}.json', df.to_json(orient='records', indent=2))
+        resp = HttpResponse(buf.getvalue(), content_type='application/zip')
+        resp['Content-Disposition'] = f'attachment; filename="export_{fmt}.zip"'
+        return resp
 
     elif action == 'drop':
-        protected = [name for name in table_names if _is_protected_table(name)]
-        droppable = [name for name in table_names if name not in protected]
+        protected = [name for name in table_names if not is_schema_drop_allowed(name)]
+        droppable = [name for name in table_names if is_schema_drop_allowed(name)]
 
         for table_name in droppable:
-            Dataset.objects.filter(name=table_name).delete()
             _drop_db_table(table_name, cascade=True)
 
         if droppable:
@@ -975,6 +665,28 @@ def db_explorer_bulk_action(request):
                 request,
                 f'Skipped {len(protected)} protected table(s): {", ".join(protected[:5])}.'
             )
+
+    elif action == 'truncate':
+        truncated = []
+        protected = []
+        fk_errors = []
+        for table_name in table_names:
+            if not is_row_replace_allowed(table_name):
+                protected.append(table_name)
+                continue
+            quoted = connection.ops.quote_name(table_name)
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(f'DELETE FROM {quoted}')
+                truncated.append(table_name)
+            except Exception:
+                fk_errors.append(table_name)
+        if truncated:
+            messages.success(request, f'Cleared data from {len(truncated)} table(s): {", ".join(truncated[:5])}.')
+        if fk_errors:
+            messages.error(request, f'Cannot clear {len(fk_errors)} table(s) due to foreign key references: {", ".join(fk_errors[:5])}. Clear the referencing tables first.')
+        if protected:
+            messages.warning(request, f'Skipped {len(protected)} protected table(s): {", ".join(protected[:5])}.')
 
     else:
         messages.error(request, 'Unsupported database table bulk action.')
@@ -1018,6 +730,7 @@ def db_explorer_table(request, table_name):
         'total': total,
         'page_obj': page_obj,
         'pk_column': pk_column,
+        'can_drop_schema': is_schema_drop_allowed(table_name),
     }
     context.update(_page_size_context(page_size_param))
     return render(request, 'dataflow/db_explorer_table.html', context)
@@ -1060,7 +773,7 @@ def db_explorer_export(request, table_name):
         resp['Content-Disposition'] = f'attachment; filename="{table_name}.csv"'
     elif fmt == 'json':
         resp = HttpResponse(
-            df.to_json(orient='records', indent=2, force_ascii=False),
+            json.dumps(data, indent=2, ensure_ascii=False, cls=DjangoJSONEncoder),
             content_type='application/json')
         resp['Content-Disposition'] = f'attachment; filename="{table_name}.json"'
     elif fmt == 'sql':
@@ -1120,6 +833,7 @@ def db_explorer_export(request, table_name):
         resp['Content-Disposition'] = f'attachment; filename="{table_name}.sql"'
     else:
         buf = io.BytesIO()
+        df = _prepare_dataframe_for_excel(df)
         with pd.ExcelWriter(buf, engine='openpyxl') as writer:
             df.to_excel(writer, index=False)
         resp = HttpResponse(
@@ -1133,27 +847,7 @@ def db_explorer_export(request, table_name):
 # ── DB Explorer: Import as Dataset ──
 
 def db_explorer_import(request, table_name):
-    from .db_explorer import get_table_data, get_table_schema
-    from dataflow.models import Dataset
-
-    if table_name not in connection.introspection.table_names():
-        raise Http404
-
-    columns = get_table_schema(table_name)
-    _, total, _, _ = get_table_data(table_name, page=1, page_size=1)
-
-    # Replace existing reference or dataset with same name
-    Dataset.objects.filter(name=table_name).delete()
-
-    Dataset.objects.create(
-        name=table_name,
-        description=f'__ref:{table_name}',
-        raw_data=[],
-    )
-
-    messages.success(request,
-        f'Linked "{table_name}" as dataset: {total} rows, {len(columns)} columns (live reference).')
-    return redirect('dataflow:home')
+    return redirect('dataflow:db_explorer')
 
 
 # ── DB Explorer: Delete Table ──
@@ -1163,9 +857,13 @@ def db_explorer_delete(request, table_name):
         raise Http404
 
     if request.method == 'POST':
-        # Also delete any corresponding Dataset
-        from dataflow.models import Dataset
-        Dataset.objects.filter(name=table_name).delete()
+        if not is_schema_drop_allowed(table_name):
+            messages.error(
+                request,
+                f'Table "{table_name}" is managed by Django/Dataflow core and cannot be schema-dropped. '
+                'Use row replace/import instead.'
+            )
+            return redirect('dataflow:db_explorer_table', table_name=table_name)
 
         _drop_db_table(table_name, cascade=True)
 
@@ -1174,4 +872,5 @@ def db_explorer_delete(request, table_name):
 
     return render(request, 'dataflow/db_explorer_delete.html', {
         'table_name': table_name,
+        'can_drop_schema': is_schema_drop_allowed(table_name),
     })

@@ -11,6 +11,126 @@
     <link href="{% static 'dataflow/assets/css/bootstrap.min.css' %}" rel="stylesheet" type="text/css" />
     <link href="{% static 'dataflow/assets/css/icons.min.css' %}" rel="stylesheet" type="text/css" />
     <link href="{% static 'dataflow/assets/css/app.min.css' %}" rel="stylesheet" type="text/css" />
+    <style>
+        .brand .logo-lg {
+            max-width: 170px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .dataflow-toolbar {
+            gap: .5rem;
+            min-width: 0;
+        }
+        .dataflow-toolbar > .btn,
+        .dataflow-toolbar > .dropdown,
+        .dataflow-toolbar > .form-control,
+        .dataflow-toolbar > .form-select,
+        .dataflow-toolbar > .input-group {
+            flex-shrink: 0;
+        }
+        .dataflow-card-header-row {
+            row-gap: .75rem;
+        }
+        .dataflow-header-controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            gap: .5rem;
+            min-width: 0;
+        }
+        .dataflow-header-controls > * {
+            flex: 0 0 auto;
+        }
+        .dataflow-bulk-form {
+            width: auto;
+            max-width: 100%;
+        }
+        .dataflow-bulk-group {
+            width: auto;
+            min-width: 300px;
+        }
+        .dataflow-action-select {
+            min-width: 220px;
+        }
+        .dataflow-search {
+            width: min(260px, 100%);
+        }
+        .dataflow-table-name {
+            max-width: min(54vw, 520px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        @media (max-width: 1399.98px) {
+            .dataflow-header-controls {
+                justify-content: flex-start;
+                width: 100%;
+            }
+        }
+        @media (max-width: 1199.98px) {
+            .topbar .app-search {
+                display: none !important;
+            }
+            .brand .logo-lg {
+                max-width: 132px;
+                font-size: .95rem !important;
+            }
+            .dataflow-action-select {
+                min-width: 200px;
+            }
+        }
+        @media (max-width: 767.98px) {
+            .page-title-box {
+                gap: .5rem;
+            }
+            .card-header .row.align-items-center > .col,
+            .card-header .row.align-items-center > .col-auto {
+                flex: 0 0 100%;
+                width: 100%;
+                max-width: 100%;
+            }
+            .card-header .form-control,
+            .card-header .form-select,
+            .card-header .btn,
+            .card-header form {
+                width: 100%;
+            }
+            .card-header form.d-flex,
+            .dataflow-toolbar {
+                flex-wrap: wrap;
+            }
+            .dataflow-header-controls {
+                align-items: stretch;
+            }
+            .dataflow-search,
+            .dataflow-action-select,
+            .dataflow-bulk-group {
+                width: 100%;
+                min-width: 0;
+            }
+            .dataflow-bulk-form {
+                width: 100%;
+            }
+            .dataflow-toolbar > *,
+            .dataflow-toolbar .btn,
+            .dataflow-toolbar .dropdown,
+            .dataflow-toolbar .dropdown > .btn {
+                width: 100%;
+            }
+            .dataflow-summary-bar {
+                flex-direction: column;
+                align-items: flex-start !important;
+                gap: .75rem;
+            }
+            .dataflow-table-name {
+                max-width: 100%;
+                white-space: normal;
+                overflow-wrap: anywhere;
+            }
+        }
+    </style>
     <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
     {% block head %}{% endblock %}
 </head>
@@ -46,7 +166,7 @@
     <!-- Sidebar -->
     <div class="startbar d-print-none">
         <div class="brand">
-            <a href="{% url 'dataflow:home' %}" class="logo">
+            <a href="{% url 'dataflow:db_explorer' %}" class="logo">
                 <span class="logo-sm">
                     <span class="fs-4 fw-bold text-primary">D</span>
                 </span>
@@ -60,22 +180,15 @@
                     <ul class="navbar-nav mb-auto w-100">
                         <li class="menu-label mt-2"><span>Main</span></li>
                         <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'dataflow:home' %}">
-                                <i class="iconoir-report-columns menu-icon"></i>
-                                <span>Datasets</span>
+                            <a class="nav-link {% if request.resolver_match.url_name == 'db_explorer' or request.resolver_match.url_name == 'db_explorer_table' %}active{% endif %}" href="{% url 'dataflow:db_explorer' %}">
+                                <i class="iconoir-database menu-icon"></i>
+                                <span>DB Explorer</span>
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'upload' %}active{% endif %}" href="{% url 'dataflow:upload' %}">
                                 <i class="iconoir-upload-square-outline menu-icon"></i>
                                 <span>Upload</span>
-                            </a>
-                        </li>
-                        <li class="menu-label mt-2"><span>Database</span></li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'db_explorer' or request.resolver_match.url_name == 'db_explorer_table' %}active{% endif %}" href="{% url 'dataflow:db_explorer' %}">
-                                <i class="iconoir-database menu-icon"></i>
-                                <span>DB Explorer</span>
                             </a>
                         </li>
                         <li class="menu-label mt-2"><span>More</span></li>

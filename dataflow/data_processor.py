@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
+import os
 import re
 from datetime import datetime
 from decimal import Decimal
@@ -48,8 +49,29 @@ def clean_url(value: Any) -> str:
         raise ValueError(f"Invalid URL: {value}")
     return s
 
-# image URLs use the same validation as url
-clean_image = clean_url
+def clean_image(value: Any) -> str:
+    """Accept image file paths (relative or absolute) or URLs as-is."""
+    return clean_string(value)
+
+def clean_text(value: Any) -> str:
+    """Preserve text content without modification."""
+    if value is None:
+        return ''
+    return str(value).strip()
+
+def clean_time(value: Any, formats: List[str] = None) -> Optional[str]:
+    if not value:
+        return None
+    s = clean_string(value)
+    if formats is None:
+        formats = ['%H:%M:%S', '%H:%M']
+    for fmt in formats:
+        try:
+            from datetime import datetime as dt
+            return dt.strptime(s, fmt).strftime('%H:%M:%S')
+        except ValueError:
+            continue
+    raise ValueError(f"Time '{s}' not parsable")
 
 def clean_int(value: Any, default: int = 0, min_val: Optional[int] = None, max_val: Optional[int] = None) -> int:
     try:
@@ -73,10 +95,10 @@ def clean_float(value: Any, default: float = 0.0, min_val: Optional[float] = Non
         v = min(max_val, v)
     return v
 
-def clean_decimal(value: Any, default: Decimal = Decimal('0'), min: Optional[Decimal] = None) -> Decimal:
+def clean_decimal(value: Any, default: Decimal = Decimal('0'), min_val: Optional[Decimal] = None) -> Decimal:
     try:
         v = Decimal(str(value)) if value else default
-    except:
+    except Exception:
         v = default
     if min_val is not None and v < min_val:
         v = min_val
@@ -126,11 +148,13 @@ BUILTIN_RULES = {
     'phone': clean_phone,
     'url': clean_url,
     'image': clean_image,
+    'text': clean_text,
     'int': clean_int,
     'float': clean_float,
     'decimal': clean_decimal,
     'date': clean_date,
     'datetime': clean_datetime,
+    'time': clean_time,
     'boolean': clean_boolean,
 }
 
